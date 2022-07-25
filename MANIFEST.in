@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include sabaintegration *.css
+recursive-include sabaintegration *.csv
+recursive-include sabaintegration *.html
+recursive-include sabaintegration *.ico
+recursive-include sabaintegration *.js
+recursive-include sabaintegration *.json
+recursive-include sabaintegration *.md
+recursive-include sabaintegration *.png
+recursive-include sabaintegration *.py
+recursive-include sabaintegration *.svg
+recursive-include sabaintegration *.txt
+recursive-exclude sabaintegration *.pyc
