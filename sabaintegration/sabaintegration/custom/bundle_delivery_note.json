@@ -1,0 +1,32 @@
+{
+ "custom_fields": [],
+ "custom_perms": [],
+ "doctype": "Bundle Delivery Note",
+ "property_setters": [
+  {
+   "_assign": null,
+   "_comments": null,
+   "_liked_by": null,
+   "_user_tags": null,
+   "creation": "2022-09-12 07:53:32.916335",
+   "default_value": null,
+   "doc_type": "Bundle Delivery Note",
+   "docstatus": 0,
+   "doctype_or_field": "DocType",
+   "field_name": null,
+   "idx": 0,
+   "modified": "2022-09-12 07:53:32.916335",
+   "modified_by": "erp@saba-eg.com",
+   "name": "Bundle Delivery Note-main-autoname",
+   "owner": "erp@saba-eg.com",
+   "parent": null,
+   "parentfield": null,
+   "parenttype": null,
+   "property": "autoname",
+   "property_type": "Data",
+   "row_name": null,
+   "value": "BDN.#####"
+  }
+ ],
+ "sync_on_migrate": 1
+}

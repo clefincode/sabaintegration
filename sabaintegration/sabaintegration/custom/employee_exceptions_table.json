@@ -1,0 +1,43 @@
+{
+ "custom_fields": [],
+ "custom_perms": [
+  {
+   "_assign": null,
+   "_comments": null,
+   "_liked_by": null,
+   "_user_tags": null,
+   "amend": 0,
+   "cancel": 0,
+   "create": 0,
+   "creation": "2022-05-09 09:23:20.552272",
+   "delete": 0,
+   "docstatus": 0,
+   "email": 0,
+   "export": 1,
+   "idx": 0,
+   "if_owner": 0,
+   "import": 0,
+   "modified": "2022-05-09 09:23:20.592827",
+   "modified_by": "Administrator",
+   "name": "6a0e661057",
+   "owner": "Administrator",
+   "parent": "Employee Exceptions Table",
+   "parentfield": "permissions",
+   "parenttype": "DocType",
+   "permlevel": 0,
+   "print": 0,
+   "read": 0,
+   "report": 0,
+   "role": "Employee Self Service",
+   "select": 1,
+   "set_user_permissions": 0,
+   "share": 0,
+   "submit": 0,
+   "user_permission_doctypes": null,
+   "write": 0
+  }
+ ],
+ "doctype": "Employee Exceptions Table",
+ "property_setters": [],
+ "sync_on_migrate": 1
+}
