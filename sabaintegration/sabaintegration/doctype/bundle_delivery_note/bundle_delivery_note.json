@@ -11,6 +11,8 @@
   "sales_order",
   "column_break_3",
   "price_list",
+  "company",
+  "project",
   "section_break_5",
   "stock_entries",
   "delivery_note",
@@ -66,12 +68,25 @@
   {
    "fieldname": "section_break_5",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2022-08-18 12:43:55.047875",
+ "modified": "2022-10-19 12:08:16.346789",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Bundle Delivery Note",

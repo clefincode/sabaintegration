@@ -34,7 +34,11 @@ app_license = "MIT"
 doctype_js = {
 	"Sales Order" : "public/js/doctype/sales_order_updates.js",
 	"Delivery Note" : "public/js/doctype/delivery_note_updates.js",
-	"Product Bundle" : "public/js/doctype/product_bundle_item_prevents.js"
+	"Product Bundle" : "public/js/doctype/product_bundle_item_prevents.js",
+	"Opportunity" : "public/js/doctype/opportunity.js",
+	"Request for Quotation": "public/js/doctype/request_for_quotation.js",
+	"Supplier Quotation": "public/js/doctype/supplier_quotation.js",
+	"Quotation": "public/js/doctype/quotation.js"
 	}
 # doctype_js = {"doctype" : "public/js/doctype.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
@@ -81,20 +85,27 @@ doctype_js = {
 # Permissions evaluated in scripted ways
 
 # permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
+# 	"ToDo": "sabaintegration.www.permissions.query_condition_for_todo"
 # }
 #
 # has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
+#  	"Event": "sabaintegration.www.permissions.has_permission",
 # }
 
 # DocType Class
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	'Opportunity': 'sabaintegration.overrides.opportunity.CustomOpportunity',
+	'Warranty Claim': 'sabaintegration.overrides.warranty_claim.CustomWarrantyClaim',
+	'Issue': 'sabaintegration.overrides.issue.CustomIssue',
+	'Supplier Quotation': 'sabaintegration.overrides.supplier_quotation.CustomSupplierQuotation',
+	'Request for Quotation': 'sabaintegration.overrides.request_for_quotation.CustomRequestforQuotation',
+	'Quotation': 'sabaintegration.overrides.quotation.CustomQuotation',
+	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
+	'Employee': 'sabaintegration.overrides.employee.CustomEmployee'
+}
 
 # Document Events
 # ---------------

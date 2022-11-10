@@ -1,8 +1,32 @@
 
 frappe.ui.form.on('Product Bundle', {
 
-	refresh(frm) {
+	validate(frm) {
 		// your code here
+		
+		let new_item_code0 = frm.doc.new_item_code;
+		frappe.call({
+			method: 'sabaintegration.www.api.product_bundle_check_sales_order',
+			args: {
+				item: new_item_code0
+			},
+			freeze: true,
+			callback: function(r) {
+				if(r.message) {
+					frm.fields_dict.items.grid.wrapper.on('click', 'button[data-label="Save"]', function(e) {
+						frm.disable_save();
+					});
+					frappe.validated = false;
+					
+					frm.disable_save();
+					frm.refresh();
+
+				}
+				// else{
+				// 	// console.log("tt");
+				// }
+			}
+		});
 	}
     ,
     new_item_code: function(frm) {

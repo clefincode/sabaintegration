@@ -109,11 +109,10 @@ class BundleDeliveryNote(Document):
 				_("Serial no(s) required for serialized item {0}").format(item_code))
 		
 	def create_stock_entry(self):
-		stock_entries = frappe.db.get_all("Stock Entry", {'from_bundle_delivery_note': self.name, 'docstatus': ('!=', 2)}, ['name'])
 		for item in self.stock_entries:
-			self._create_stock_entry(item, stock_entries)
+			self._create_stock_entry(item)
 
-	def _create_stock_entry(self, item, stock_entries):
+	def _create_stock_entry(self, item):
 		qty = item.qty
 		if not item.batch_no: batch_no = '' 
 		else: batch_no = item.batch_no		
@@ -149,6 +148,7 @@ class BundleDeliveryNote(Document):
 				frappe.msgprint("Delivery Note is {0}".format('<a href="/app/delivery-note/'+ self.delivery_note + '" class="strong">'+ self.delivery_note + '</a>'))
 				return
 		delivery_note = make_delivery_note(self.sales_order)
+		delivery_note.project = self.project
 		delivery_note.save()
 		self.delivery_note = delivery_note.name
 		frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', delivery_note.name)

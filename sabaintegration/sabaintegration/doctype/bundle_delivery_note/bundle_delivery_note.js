@@ -151,11 +151,13 @@ frappe.ui.form.on('Bundle Delivery Note', {
 			})
 	},
 	sales_order: function(frm){
-		frappe.db.get_value("Sales Order", frm.doc.sales_order, ["selling_price_list", "company"], (r) => {
+		frappe.db.get_value("Sales Order", frm.doc.sales_order, ["selling_price_list", "company", "project"], (r) => {
 			frm.set_value("price_list", r.selling_price_list);
 			frm.refresh_field("price_list");
 			frm.set_value("company", r.company);
 			frm.refresh_field("company");
+			frm.set_value("project", r.project);
+			frm.refresh_field("project");
 
 		})
 		let itemsPromise = new Promise(function(resolve){

@@ -5,7 +5,6 @@
 
 frappe.ui.form.on("Sales Order", {
 	setup: function(frm) {
-        console.log("started");
 		frm.custom_make_buttons = {
 			'Bundle Delivery Note': 'Bundle Delivery Note',  ///Custom Update
 			'Delivery Note': 'Delivery Note',
@@ -366,7 +365,7 @@ erpnext.selling.SalesOrderController = erpnext.selling.SellingController.extend(
 
 	make_material_request: function() {
 		frappe.model.open_mapped_doc({
-			method: "erpnext.selling.doctype.sales_order.sales_order.make_material_request",
+			method: "sabaintegration.www.api.make_material_request", ///Custom Update
 			frm: this.frm
 		})
 	},
@@ -679,7 +678,7 @@ erpnext.selling.SalesOrderController = erpnext.selling.SellingController.extend(
 
 				var method = args.against_default_supplier ? "make_purchase_order_for_default_supplier" : "make_purchase_order"
 				return frappe.call({
-					method: "erpnext.selling.doctype.sales_order.sales_order." + method,
+					method: "sabaintegration.www.api." + method,
 					freeze: true,
 					freeze_message: __("Creating Purchase Order ..."),
 					args: {
