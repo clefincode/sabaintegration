@@ -112,7 +112,7 @@ frappe.ui.form.on("Opportunity", {
                 }, num+ ' Options');
             }
             else{
-                frm.set_df_property('option_2', 'hidden', 1);
+                frm.set_df_property('option_2', 'hidden', 0);
             }
             if (frm.doc.option_3.length != 0){
                 frm.set_df_property('option_3', 'hidden', 0);
