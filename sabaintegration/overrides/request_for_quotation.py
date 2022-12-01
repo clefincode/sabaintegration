@@ -19,11 +19,12 @@ from erpnext.buying.utils import validate_for_items
 from erpnext.controllers.buying_controller import BuyingController
 from erpnext.stock.doctype.material_request.material_request import set_missing_values
 from erpnext.buying.doctype.request_for_quotation.request_for_quotation import RequestforQuotation
-
+from sabaintegration.stock.get_item_details import get_item_warehouse
+from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 STANDARD_USERS = ("Guest", "Administrator")
 
 
-class CustomRequestforQuotation(BuyingController):
+class CustomRequestforQuotation(RequestforQuotation):
     def validate(self):
         self.validate_duplicate_supplier()
         self.validate_supplier_list()
@@ -34,266 +35,96 @@ class CustomRequestforQuotation(BuyingController):
         if self.docstatus < 1:
             # after amend and save, status still shows as cancelled, until submit
             frappe.db.set(self, "status", "Draft")
+        self.validate_bundle_items() ###Custom Update
 
-    def validate_duplicate_supplier(self):
-        supplier_list = [d.supplier for d in self.suppliers]
-        if len(supplier_list) != len(set(supplier_list)):
-            frappe.throw(_("Same supplier has been entered multiple times"))
+    def validate_bundle_items(self):
+        """Check if product bundle item in items table 
+        has at least one packed item in packed items table
+        if not, remove it"""
+        
+        if self.get_doc_before_save():
+            items_before_save = [item.item_code for item in self.get_doc_before_save().get("packed_items")]
+            items_after_save = [item.item_code for item in self.get("packed_items")]
+            reset_table = items_before_save != items_after_save
+            if not reset_table: return
+        i = 0
+        itemslist = []
+        for item in self.items:
+            if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+                found = False
+                for bundle_item in get_product_bundle_items(item.item_code):
+                    for packed_item in self.packed_items:
+                        if packed_item.item_code == bundle_item.item_code:
+                            found = True
+                            break
+                    if found:
+                        itemslist.append(item)
+                        break
+            else: itemslist.append(item)
+        self.update({"items": itemslist})
 
-    def validate_supplier_list(self):
-        for d in self.suppliers:
-            prevent_rfqs = frappe.db.get_value("Supplier", d.supplier, "prevent_rfqs")
-            if prevent_rfqs:
-                standing = frappe.db.get_value("Supplier Scorecard", d.supplier, "status")
-                frappe.throw(
-                    _("RFQs are not allowed for {0} due to a scorecard standing of {1}").format(
-                        d.supplier, standing
-                    )
-                )
-            warn_rfqs = frappe.db.get_value("Supplier", d.supplier, "warn_rfqs")
-            if warn_rfqs:
-                standing = frappe.db.get_value("Supplier Scorecard", d.supplier, "status")
-                frappe.msgprint(
-                    _(
-                        "{0} currently has a {1} Supplier Scorecard standing, and RFQs to this supplier should be issued with caution."
-                    ).format(d.supplier, standing),
-                    title=_("Caution"),
-                    indicator="orange",
-                )
+    def autoname(self):
+        ###If this rfq is coming from an opportunity option,
+        ###then the name of rfq will include the opportunity name and option
+        is_from_opp = False
+        opportunity = None
+        option_number = None
+        for item in self.get("items"):
+            if item.opportunity and item.opportunity_option_number: 
+                opportunity = item.opportunity
+                option_number = item.opportunity_option_number
+                is_from_opp = True
+                break
+        if is_from_opp:
+            from frappe.model.naming import make_autoname
 
-    def update_email_id(self):
-        for rfq_supplier in self.suppliers:
-            if not rfq_supplier.email_id:
-                rfq_supplier.email_id = frappe.db.get_value("Contact", rfq_supplier.contact, "email_id")
+            name = "PUR-RFQ-{0}-OP{1}-".format(opportunity, option_number)
+            self.name= make_autoname(name+".####", "", self)
 
-    def validate_email_id(self, args):
-        if not args.email_id:
-            frappe.throw(
-                _("Row {0}: For Supplier {1}, Email Address is Required to send an email").format(
-                    args.idx, frappe.bold(args.supplier)
-                )
-            )
+        else:
+            from frappe.model.naming import set_name_by_naming_series, make_autoname
 
-    def on_submit(self):
-        frappe.db.set(self, "status", "Submitted")
-        for supplier in self.suppliers:
-            supplier.email_sent = 0
-            supplier.quote_status = "Pending"
-        self.send_to_supplier()
-
-    def on_cancel(self):
-        frappe.db.set(self, "status", "Cancelled")
+            set_name_by_naming_series(self)
 
     @frappe.whitelist()
-    def get_supplier_email_preview(self, supplier):
-        """Returns formatted email preview as string."""
-        rfq_suppliers = list(filter(lambda row: row.supplier == supplier, self.suppliers))
-        rfq_supplier = rfq_suppliers[0]
-
-        self.validate_email_id(rfq_supplier)
-
-        message = self.supplier_rfq_mail(rfq_supplier, "", self.get_link(), True)
-
-        return message
-
-    def send_to_supplier(self):
-        """Sends RFQ mail to involved suppliers."""
-        for rfq_supplier in self.suppliers:
-            if rfq_supplier.email_id is not None and rfq_supplier.send_email:
-                self.validate_email_id(rfq_supplier)
-
-                # make new user if required
-                update_password_link, contact = self.update_supplier_contact(rfq_supplier, self.get_link())
-
-                self.update_supplier_part_no(rfq_supplier.supplier)
-                self.supplier_rfq_mail(rfq_supplier, update_password_link, self.get_link())
-                rfq_supplier.email_sent = 1
-                if not rfq_supplier.contact:
-                    rfq_supplier.contact = contact
-                rfq_supplier.save()
-
-    def get_link(self):
-        # RFQ link for supplier portal
-        return get_url("/rfq/" + self.name)
-
-    def update_supplier_part_no(self, supplier):
-        self.vendor = supplier
-        for item in self.items:
-            item.supplier_part_no = frappe.db.get_value(
-                "Item Supplier", {"parent": item.item_code, "supplier": supplier}, "supplier_part_no"
-            )
-
-    def update_supplier_contact(self, rfq_supplier, link):
-        """Create a new user for the supplier if not set in contact"""
-        update_password_link, contact = "", ""
-
-        if frappe.db.exists("User", rfq_supplier.email_id):
-            user = frappe.get_doc("User", rfq_supplier.email_id)
-        else:
-            user, update_password_link = self.create_user(rfq_supplier, link)
-
-        contact = self.link_supplier_contact(rfq_supplier, user)
-
-        return update_password_link, contact
-
-    def link_supplier_contact(self, rfq_supplier, user):
-        """If no Contact, create a new contact against Supplier. If Contact exists, check if email and user id set."""
-        if rfq_supplier.contact:
-            contact = frappe.get_doc("Contact", rfq_supplier.contact)
-        else:
-            contact = frappe.new_doc("Contact")
-            contact.first_name = rfq_supplier.supplier_name or rfq_supplier.supplier
-            contact.append("links", {"link_doctype": "Supplier", "link_name": rfq_supplier.supplier})
-            contact.append("email_ids", {"email_id": user.name, "is_primary": 1})
-
-        if not contact.email_id and not contact.user:
-            contact.email_id = user.name
-            contact.user = user.name
-
-        contact.save(ignore_permissions=True)
-
-        if not rfq_supplier.contact:
-            # return contact to later update, RFQ supplier row's contact
-            return contact.name
-
-    def create_user(self, rfq_supplier, link):
-        user = frappe.get_doc(
-            {
-                "doctype": "User",
-                "send_welcome_email": 0,
-                "email": rfq_supplier.email_id,
-                "first_name": rfq_supplier.supplier_name or rfq_supplier.supplier,
-                "user_type": "Website User",
-                "redirect_url": link,
-            }
-        )
-        user.save(ignore_permissions=True)
-        update_password_link = user.reset_password()
-
-        return user, update_password_link
-
-    def supplier_rfq_mail(self, data, update_password_link, rfq_link, preview=False):
-        full_name = get_user_fullname(frappe.session["user"])
-        if full_name == "Guest":
-            full_name = "Administrator"
-
-        # send document dict and some important data from suppliers row
-        # to render message_for_supplier from any template
-        doc_args = self.as_dict()
-        doc_args.update({"supplier": data.get("supplier"), "supplier_name": data.get("supplier_name")})
-
-        args = {
-            "update_password_link": update_password_link,
-            "message": frappe.render_template(self.message_for_supplier, doc_args),
-            "rfq_link": rfq_link,
-            "user_fullname": full_name,
-            "supplier_name": data.get("supplier_name"),
-            "supplier_salutation": self.salutation or "Dear Mx.",
-        }
-
-        subject = self.subject or _("Request for Quotation")
-        template = "templates/emails/request_for_quotation.html"
-        sender = frappe.session.user not in STANDARD_USERS and frappe.session.user or None
-        message = frappe.get_template(template).render(args)
-
-        if preview:
-            return message
-
-        attachments = self.get_attachments()
-
-        self.send_email(data, sender, subject, message, attachments)
-
-    def send_email(self, data, sender, subject, message, attachments):
-        make(
-            subject=subject,
-            content=message,
-            recipients=data.email_id,
-            sender=sender,
-            attachments=attachments,
-            send_email=True,
-            doctype=self.doctype,
-            name=self.name,
-        )["name"]
-
-        frappe.msgprint(_("Email Sent to Supplier {0}").format(data.supplier))
-
-    def get_attachments(self):
-        attachments = [d.name for d in get_attachments(self.doctype, self.name)]
-        attachments.append(frappe.attach_print(self.doctype, self.name, doc=self))
-        return attachments
-
-    def update_rfq_supplier_status(self, sup_name=None):
-        for supplier in self.suppliers:
-            if sup_name == None or supplier.supplier == sup_name:
-                quote_status = _("Received")
-                for item in self.items:
-                    sqi_count = frappe.db.sql(
-                        """
-                        SELECT
-                            COUNT(sqi.name) as count
-                        FROM
-                            `tabSupplier Quotation Item` as sqi,
-                            `tabSupplier Quotation` as sq
-                        WHERE sq.supplier = %(supplier)s
-                            AND sqi.docstatus = 1
-                            AND sqi.request_for_quotation_item = %(rqi)s
-                            AND sqi.parent = sq.name""",
-                        {"supplier": supplier.supplier, "rqi": item.name},
-                        as_dict=1,
-                    )[0]
-                    if (sqi_count.count) == 0:
-                        quote_status = _("Pending")
-                supplier.quote_status = quote_status
-
-
-@frappe.whitelist()
-def send_supplier_emails(rfq_name):
-    check_portal_enabled("Request for Quotation")
-    rfq = frappe.get_doc("Request for Quotation", rfq_name)
-    if rfq.docstatus == 1:
-        rfq.send_to_supplier()
-
-
-def check_portal_enabled(reference_doctype):
-    if not frappe.db.get_value(
-        "Portal Menu Item", {"reference_doctype": reference_doctype}, "enabled"
-    ):
-        frappe.throw(
-            _(
-                "The Access to Request for Quotation From Portal is Disabled. To Allow Access, Enable it in Portal Settings."
-            )
-        )
-
-
-def get_list_context(context=None):
-    from erpnext.controllers.website_list_for_contact import get_list_context
-
-    list_context = get_list_context(context)
-    list_context.update(
-        {
-            "show_sidebar": True,
-            "show_search": True,
-            "no_breadcrumbs": True,
-            "title": _("Request for Quotation"),
-        }
-    )
-    return list_context
-
-
-@frappe.whitelist()
-@frappe.validate_and_sanitize_search_inputs
-def get_supplier_contacts(doctype, txt, searchfield, start, page_len, filters):
-    return frappe.db.sql(
-        """select `tabContact`.name from `tabContact`, `tabDynamic Link`
-        where `tabDynamic Link`.link_doctype = 'Supplier' and (`tabDynamic Link`.link_name=%(name)s
-        and `tabDynamic Link`.link_name like %(txt)s) and `tabContact`.name = `tabDynamic Link`.parent
-        limit %(start)s, %(page_len)s""",
-        {"start": start, "page_len": page_len, "txt": "%%%s%%" % txt, "name": filters.get("supplier")},
-    )
-
+    def make_packing_list(self):
+        from erpnext.stock.doctype.packed_item.packed_item import reset_packing_list
+        from copy import deepcopy
+        
+        doc = deepcopy(self)
+        reset = reset_packing_list(doc)
+        if reset:
+            packing_list = {}
+            brand_list = {}
+            for item_row in doc.get("items"):
+                if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
+                    for bundle_item in get_product_bundle_items(item_row.item_code):
+                        packing_list[bundle_item.item_code] = packing_list.get(bundle_item.item_code, 0) + (bundle_item.qty * float(item_row.qty)) 
+                        brand_list[bundle_item.item_code] = frappe.db.get_value("Item", bundle_item.item_code, "brand")
+            
+            brand_list = sorted(brand_list.items(), key=lambda x:x[1])
+            for item in brand_list:
+                doc.append("packed_items", {
+                    "item_code": item[0],
+                    "qty": packing_list[item[0]],
+                    "uom": frappe.db.get_value("Item", item[0], "stock_uom"),
+                    "description": frappe.db.get_value("Item", item[0], "description"),
+                    "brand": item[1],
+                    "warehouse": get_item_warehouse(frappe.get_doc("Item", item[0]), args = frappe._dict({"company": self.company}), overwrite_warehouse = True)
+                })
+        return doc.get("packed_items")
 
 @frappe.whitelist()
 def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=None):
+    if not frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": source_name, "docstatus": ("!=", 2)}):
+        doclist = first_supplier_quotation(source_name, target_doc, for_supplier)
+        
+    else:
+        doclist = not_first_supplier_quotation(source_name, target_doc, for_supplier)
+
+    return doclist
+
+def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
     def postprocess(source, target_doc):
         if for_supplier:
             target_doc.supplier = for_supplier
@@ -307,23 +138,23 @@ def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=
         set_missing_values(source, target_doc)
 
     doclist = get_mapped_doc(
-        "Request for Quotation",
-        source_name,
-        {
-            "Request for Quotation": {
-                "doctype": "Supplier Quotation",
-                "validation": {"docstatus": ["=", 1]},
+            "Request for Quotation",
+            source_name,
+            {
+                "Request for Quotation": {
+                    "doctype": "Supplier Quotation",
+                    "validation": {"docstatus": ["=", 1]},
+                },
+                "Request for Quotation Packed Item": {
+                    "doctype": "Supplier Quotation Item",
+                    "field_map": {"name": "request_for_quotation_item", "parent": "request_for_quotation"},
+                },
             },
-            "Request for Quotation Packed Item": {
-                "doctype": "Supplier Quotation Item",
-                "field_map": {"name": "request_for_quotation_item", "parent": "request_for_quotation"},
-            },
-        },
-        target_doc,
-        postprocess,
-    )
+            target_doc,
+            postprocess,
+        )
+    newitems = doclist.items
     items = frappe.get_doc("Request for Quotation", source_name).items
-    item_list = doclist.items
     for item in items:
         if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
             found = False
@@ -332,198 +163,76 @@ def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=
                 if s_item.item_code == item.item_code:
                     found = True
                     doclist.items[i].qty += item.qty
-                    item_list = doclist.items
+                    newitems = doclist.items
+                    break
+                    
             if not found:
                 sqi = frappe.new_doc("Supplier Quotation Item")
                 sqi.item_code = item.item_code
                 sqi.qty = item.qty
-                sqi.item_name = item.item_name
+                sqi.item_name = frappe.db.get_value("Item", item.item_code, "item_name")
                 sqi.description = item.description
                 sqi.uom = item.uom
                 sqi.request_for_quotation = item.parent
-                item_list.append(sqi)
+                newitems.append(sqi)
     doclist.update({
-        "items": item_list
+        "items": newitems
     })
     return doclist
 
+def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
+    def postprocess(source, target_doc):
+        if for_supplier:
+            target_doc.supplier = for_supplier
+            args = get_party_details(for_supplier, party_type="Supplier", ignore_permissions=True)
+            target_doc.currency = args.currency or get_party_account_currency(
+                "Supplier", for_supplier, source.company
+            )
+            target_doc.buying_price_list = args.buying_price_list or frappe.db.get_value(
+                "Buying Settings", None, "buying_price_list"
+            )
+        set_missing_values(source, target_doc)
 
-# This method is used to make supplier quotation from supplier's portal.
-@frappe.whitelist()
-def create_supplier_quotation(doc):
-    if isinstance(doc, string_types):
-        doc = json.loads(doc)
-
-    try:
-        sq_doc = frappe.get_doc(
+    doclist = get_mapped_doc(
+            "Request for Quotation",
+            source_name,
             {
-                "doctype": "Supplier Quotation",
-                "supplier": doc.get("supplier"),
-                "terms": doc.get("terms"),
-                "company": doc.get("company"),
-                "currency": doc.get("currency")
-                or get_party_account_currency("Supplier", doc.get("supplier"), doc.get("company")),
-                "buying_price_list": doc.get("buying_price_list")
-                or frappe.db.get_value("Buying Settings", None, "buying_price_list"),
-            }
-        )
-        add_items(sq_doc, doc.get("supplier"), doc.get("items"))
-        sq_doc.flags.ignore_permissions = True
-        sq_doc.run_method("set_missing_values")
-        sq_doc.save()
-        frappe.msgprint(_("Supplier Quotation {0} Created").format(sq_doc.name))
-        return sq_doc.name
-    except Exception:
-        return None
-
-
-def add_items(sq_doc, supplier, items):
-    for data in items:
-        if data.get("qty") > 0:
-            if isinstance(data, dict):
-                data = frappe._dict(data)
-
-            create_rfq_items(sq_doc, supplier, data)
-
-
-def create_rfq_items(sq_doc, supplier, data):
-    args = {}
-
-    for field in [
-        "item_code",
-        "item_name",
-        "description",
-        "qty",
-        "rate",
-        "conversion_factor",
-        "warehouse",
-        "material_request",
-        "material_request_item",
-        "stock_qty",
-    ]:
-        args[field] = data.get(field)
-
-    args.update(
-        {
-            "request_for_quotation_item": data.name,
-            "request_for_quotation": data.parent,
-            "supplier_part_no": frappe.db.get_value(
-                "Item Supplier", {"parent": data.item_code, "supplier": supplier}, "supplier_part_no"
-            ),
-        }
-    )
-
-    sq_doc.append("items", args)
-
-
-@frappe.whitelist()
-def get_pdf(doctype, name, supplier):
-    doc = get_rfq_doc(doctype, name, supplier)
-    if doc:
-        download_pdf(doctype, name, doc=doc)
-
-
-def get_rfq_doc(doctype, name, supplier):
-    if supplier:
-        doc = frappe.get_doc(doctype, name)
-        doc.update_supplier_part_no(supplier)
-        return doc
-
-
-@frappe.whitelist()
-def get_item_from_material_requests_based_on_supplier(source_name, target_doc=None):
-    mr_items_list = frappe.db.sql(
-        """
-        SELECT
-            mr.name, mr_item.item_code
-        FROM
-            `tabItem` as item,
-            `tabItem Supplier` as item_supp,
-            `tabMaterial Request Item` as mr_item,
-            `tabMaterial Request`  as mr
-        WHERE item_supp.supplier = %(supplier)s
-            AND item.name = item_supp.parent
-            AND mr_item.parent = mr.name
-            AND mr_item.item_code = item.name
-            AND mr.status != "Stopped"
-            AND mr.material_request_type = "Purchase"
-            AND mr.docstatus = 1
-            AND mr.per_ordered < 99.99""",
-        {"supplier": source_name},
-        as_dict=1,
-    )
-
-    material_requests = {}
-    for d in mr_items_list:
-        material_requests.setdefault(d.name, []).append(d.item_code)
-
-    for mr, items in material_requests.items():
-        target_doc = get_mapped_doc(
-            "Material Request",
-            mr,
-            {
-                "Material Request": {
-                    "doctype": "Request for Quotation",
-                    "validation": {
-                        "docstatus": ["=", 1],
-                        "material_request_type": ["=", "Purchase"],
-                    },
-                },
-                "Material Request Item": {
-                    "doctype": "Request for Quotation Item",
-                    "condition": lambda row: row.item_code in items,
-                    "field_map": [
-                        ["name", "material_request_item"],
-                        ["parent", "material_request"],
-                        ["uom", "uom"],
-                    ],
+                "Request for Quotation": {
+                    "doctype": "Supplier Quotation",
+                    "validation": {"docstatus": ["=", 1]},
                 },
             },
             target_doc,
+            postprocess,
         )
+    items = frappe.get_doc("Request for Quotation", source_name).packed_items
+    items += frappe.get_doc("Request for Quotation", source_name).items
+    
+    item_list = frappe.db.get_all("Supplier Quotation Item", {"request_for_quotation": source_name, "docstatus": ("!=", 2)}, ["item_code", "qty"])
+    newitems = []
+    for item in items:
+        if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+            found = False
 
-    return target_doc
-
-
-@frappe.whitelist()
-def get_supplier_tag():
-    filters = {"document_type": "Supplier"}
-    tags = list(
-        set(tag.tag for tag in frappe.get_all("Tag Link", filters=filters, fields=["tag"]) if tag)
-    )
-
-    return tags
-
-
-@frappe.whitelist()
-@frappe.validate_and_sanitize_search_inputs
-def get_rfq_containing_supplier(doctype, txt, searchfield, start, page_len, filters):
-    conditions = ""
-    if txt:
-        conditions += "and rfq.name like '%%" + txt + "%%' "
-
-    if filters.get("transaction_date"):
-        conditions += "and rfq.transaction_date = '{0}'".format(filters.get("transaction_date"))
-
-    rfq_data = frappe.db.sql(
-        """
-        select
-            distinct rfq.name, rfq.transaction_date,
-            rfq.company
-        from
-            `tabRequest for Quotation` rfq, `tabRequest for Quotation Supplier` rfq_supplier
-        where
-            rfq.name = rfq_supplier.parent
-            and rfq_supplier.supplier = '{0}'
-            and rfq.docstatus = 1
-            and rfq.company = '{1}'
-            {2}
-        order by rfq.transaction_date ASC
-        limit %(page_len)s offset %(start)s """.format(
-            filters.get("supplier"), filters.get("company"), conditions
-        ),
-        {"page_len": page_len, "start": start},
-        as_dict=1,
-    )
-
-    return rfq_data
+            for s_item in item_list:
+                if s_item.item_code == item.item_code:
+                    found = True
+                    for newitem in newitems:
+                        if newitem.item_code == item.item_code: newitem.qty += item.qty
+                    break
+                
+                    
+            if not found:
+                sqi = frappe.new_doc("Supplier Quotation Item")
+                sqi.item_code = item.item_code
+                sqi.qty = item.qty
+                sqi.item_name = frappe.db.get_value("Item", item.item_code, "item_name")
+                sqi.description = item.description
+                sqi.uom = item.uom
+                sqi.request_for_quotation = item.parent
+                newitems.append(sqi)
+                item_list.append(sqi)
+    doclist.update({
+        "items": newitems
+    })
+    return doclist

@@ -289,7 +289,6 @@ def get_basic_details(args, item, overwrite_warehouse=True):
 			"brand_defaults": brand_defaults,
 		}
 	)
-
 	warehouse = get_item_warehouse(item, args, overwrite_warehouse, defaults)
 
 	if args.get("doctype") == "Material Request" and not args.get("material_request_type"):

@@ -10,6 +10,7 @@
   "item_code",
   "qty",
   "uom",
+  "warehouse",
   "description"
  ],
  "fields": [
@@ -50,12 +51,18 @@
    "label": "Parent Item",
    "options": "Item",
    "read_only": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse"
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2022-10-30 08:28:47.395023",
+ "modified": "2022-11-20 11:31:50.544952",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Opportunity Packed Parent Item",

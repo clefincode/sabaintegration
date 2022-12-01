@@ -7,6 +7,7 @@
  "field_order": [
   "item_code",
   "section_title",
+  "option_number",
   "col_break1",
   "qty",
   "item_group",
@@ -14,6 +15,7 @@
   "section_break_6",
   "uom",
   "item_name",
+  "warehouse",
   "description",
   "column_break_8",
   "image",
@@ -125,11 +127,23 @@
    "in_global_search": 1,
    "in_list_view": 1,
    "label": "Section Title"
+  },
+  {
+   "fieldname": "option_number",
+   "fieldtype": "Int",
+   "label": "Option Number",
+   "read_only": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2022-11-10 15:45:54.981588",
+ "modified": "2022-11-20 11:31:01.267963",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Opportunity Option",

@@ -13,14 +13,10 @@ frappe.ui.form.on("Request for Quotation",{
 			}
 		}
 		frm.set_df_property('packed_items', 'cannot_add_rows', true);
-		frm.set_df_property('packed_items', 'cannot_delete_rows', true);
+		//frm.set_df_property('packed_items', 'cannot_delete_rows', true);
+		if (!frm.doc.packed_items) frm.toggle_display('packed_items', false);
 	},
-    default_profit_margin: function(frm){
-        $.each(frm.doc.packed_items || [], function(i, d) {
-			if(!d.profit_margin) d.profit_margin = frm.doc.default_profit_margin;
-		});
-		refresh_field("packed_items");
-    },
+    
     make_suppplier_quotation: function(frm) {
 		var doc = frm.doc;
 		var dialog = new frappe.ui.Dialog({
@@ -59,9 +55,52 @@ frappe.ui.form.on("Request for Quotation",{
 	},
 })
 
-frappe.ui.form.on("Request for Quotation Packed Item", {
-	item_code: function(frm, cdt, cdn){
-        var d = locals[cdt][cdn];
-        frappe.model.set_value(cdt, cdn, "profit_margin", frm.doc.default_profit_margin)
-    },
+frappe.ui.form.on("Request for Quotation Item", {
+	item_code(frm, cdt, cdn) {
+		var child = locals[cdt][cdn];
+		child.qty = 1;
+		refresh_field("items");
+		//validate_product_bundle(frm);
+
+	},
+	qty(frm, cdt, cdn) {
+		//validate_product_bundle(frm);
+	},
+	items_remove(frm, cdt, cdn) { 
+		//validate_product_bundle(frm);
+	},	
+		
 });
+
+const validate_product_bundle = async (frm) => {
+    if (!frm.doc.items) return;
+	frappe.dom.freeze();
+
+	frappe.call({
+		doc: frm.doc,
+		method: "make_packing_list",
+		callback: function(r){
+			console.log(r.message)
+			frm.clear_table("packed_items");
+			if (r.message){
+				r.message.forEach((row) => {
+					let packed_item = frm.add_child("packed_items");
+					packed_item.item_code = row.item_code || '';
+					packed_item.qty = row.qty || 0;
+					packed_item.uom = row.uom || '';
+					packed_item.description = row.description || '';
+					packed_item.brand = row.brand || '';
+
+				})
+				
+				if (frm.doc.packed_items) frm.toggle_display('packed_items', true);
+    			
+			}
+			frm.refresh_field("packed_items");
+			frappe.dom.unfreeze()
+		}
+		
+
+	})
+
+}

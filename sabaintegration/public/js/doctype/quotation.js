@@ -219,3 +219,12 @@ frappe.ui.form.on("Quotation Item", "stock_balance", function(frm, cdt, cdn) {
 	frappe.route_options = {"item_code": d.item_code};
 	frappe.set_route("query-report", "Stock Balance");
 })
+////
+frappe.ui.form.on('Quotation Item', {
+	margin_from_supplier_quotation: function(frm,cdt,cdn){
+		var d = locals[cdt][cdn];
+		frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+		//frappe.model.set_value(cdt, cdn, "price_list_rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+	
+	}
+})

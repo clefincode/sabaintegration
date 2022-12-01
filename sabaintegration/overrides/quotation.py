@@ -8,7 +8,6 @@ from frappe.model.mapper import get_mapped_doc
 from frappe.utils import flt, getdate, nowdate
 
 from erpnext.controllers.selling_controller import SellingController
-from erpnext.selling.doctype.quotation.quotation import Quotation
 
 form_grid_templates = {"items": "templates/form_grid/item_grid.html"}
 
@@ -31,10 +30,8 @@ class CustomQuotation(SellingController):
 		if self.items:
 			self.with_items = 1
 
-		if not self.is_new() or (self.is_new() and not self.packed_items): ###Custom Update
-			make_packing_list(self) 
-		elif self.is_new() and self.packed_items and self.supplier_quotation:
-			self.add_item_name_in_packed()
+		self.add_item_name_in_packed()
+		make_packing_list(self) 
 
 	def validate_valid_till(self):
 		if self.valid_till and getdate(self.valid_till) < getdate(self.transaction_date):
@@ -59,7 +56,7 @@ class CustomQuotation(SellingController):
 	###Custom Update
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
-			if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
+			if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}) and item_row.opportunity:
 				for i in range(len(self.get("packed_items"))):
 					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code:
 						self.packed_items[i].parent_detail_docname = item_row.name
@@ -106,7 +103,54 @@ class CustomQuotation(SellingController):
 
 		else:
 			frappe.throw(_("Cannot set as Lost as Sales Order is made."))
+	###Custom Update
+	def before_submit(self):
+		self.check_opportunity()
 
+	def check_opportunity(self):
+		"""Check if the quotations comes from an opportunity
+		if yes, then check if all bundles are in the quotation"""
+
+		opportunity_name = frappe.db.get_all("Quotation Item", {"parent": self.name}, "opportunity")
+		opportunity_option = frappe.db.get_all("Quotation Item", {"parent": self.name}, "opportunity_option_number")
+		if opportunity_name:
+			opportunity_name = [sub['opportunity'] for sub in opportunity_name ]
+			opportunity_name = list(set(opportunity_name))
+			if opportunity_option:
+				opportunity_option = [sub['opportunity_option_number'] for sub in opportunity_option ]
+				opportunity_option = list(set(opportunity_option))
+
+			self.check_option_items_in_items_table(opportunity_name[0], opportunity_option[0])
+
+	def check_option_items_in_items_table(self, opportunity_name, opportunity_option):
+			if opportunity_option:
+				option_items = frappe.db.get_all("Opportunity Option", {"parent": opportunity_name, "parentfield": "option_"+str(opportunity_option)}, ["item_code", "qty"])
+			else: option_items = frappe.db.get_all("Opportunity Item", {"parent": opportunity_name}, ["item_code", "qty"])
+			
+			for option_item in option_items:
+				found = False
+				notfounditem = option_item.item_code
+				for item in self.items:
+					if (item.opportunity and item.opportunity_option_number and\
+					item.opportunity == opportunity_name and item.opportunity_option_number == opportunity_option) or\
+					(not opportunity_option and item.opportunity and item.opportunity == opportunity_name):
+						if option_item.item_code == item.item_code and option_item.qty == item.qty:
+							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+								found = True
+							else:
+								found = check_bundle_items(item, self.packed_items)
+							break
+					
+						elif option_item.item_code == item.item_code and option_item.qty > item.qty:
+							found = False
+							break
+				print(f"\033[92m {found}")
+				if not found:
+					frappe.throw("""You can't submit this document now until you add
+					all items of <b>{0}</b> of the opportunity <b>{1}</b>.<br>
+					Item <b>{2}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", opportunity_name, notfounditem))
+
+	# ###End Custom Update
 	def on_submit(self):
 		# Check for Approving Authority
 		frappe.get_doc("Authorization Control").validate_approving_authority(
@@ -334,7 +378,7 @@ def make_packing_list(doc):
 	"Make/Update packing list for Product Bundle Item."
 	from erpnext.stock.doctype.packed_item.packed_item import (
 		get_indexed_packed_items_table,
-		reset_packing_list,
+		add_packed_item_row,
 		get_product_bundle_items,
 		get_packed_item_details,
 		set_product_bundle_rate_amount,
@@ -355,9 +399,12 @@ def make_packing_list(doc):
 
 	stale_packed_items_table = get_indexed_packed_items_table(doc)
 
-	reset = reset_packing_list(doc)
+	from_option = check_if_from_opportunity_option(doc)
+	reset = reset_packing_list(doc, from_option)
 
 	for item_row in doc.get("items"):
+		if item_row.opportunity:
+			continue
 		if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
 			for bundle_item in get_product_bundle_items(item_row.item_code):
 				pi_row = add_packed_item_row(
@@ -367,8 +414,6 @@ def make_packing_list(doc):
 					packed_items_table=stale_packed_items_table,
 					reset=reset,
 				)
-				if not pi_row and doc.supplier_quotation:
-					continue
 				item_data = get_packed_item_details(bundle_item.item_code, doc.company)
 				update_packed_item_basic_data(item_row, pi_row, bundle_item, item_data)
 				update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, doc)
@@ -381,34 +426,56 @@ def make_packing_list(doc):
 	if parent_items_price:
 		set_product_bundle_rate_amount(doc, parent_items_price)  # set price in bundle item
 
-def add_packed_item_row(doc, packing_item, main_item_row, packed_items_table, reset):
-	"""Add and return packed item row.
-	doc: Transaction document
-	packing_item (dict): Packed Item details
-	main_item_row (dict): Items table row corresponding to packed item
-	packed_items_table (dict): Packed Items table before save (indexed)
-	reset (bool): State if table is reset or preserved as is
-	"""
-	exists, pi_row = False, {}
 
-	# check if row already exists in packed items table
-	key = (main_item_row.item_code, packing_item.item_code, main_item_row.name)
-	if packed_items_table.get(key):
-		pi_row, exists = packed_items_table.get(key), True
+def check_bundle_items(parent_item, packed_table):
+	from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 
-	if not exists:
-		found = True
-		if (doc.supplier_quotation):
-			found = False
-			supplier_items = frappe.get_doc("Supplier Quotation", doc.supplier_quotation).items
-			for item in supplier_items:
-				if item.item_code == key[1]:
+	bundle_items = get_product_bundle_items(parent_item.item_code)
+	for bundle_item in bundle_items:
+		found = False
+		for packed_item in packed_table:
+			if packed_item.item_code == bundle_item.item_code and parent_item.item_code == packed_item.parent_item:
+				if packed_item.qty >= bundle_item.qty * parent_item.qty:
 					found = True
 					break
-		if found:
-			pi_row = doc.append("packed_items", {})
-	elif reset:  # add row if row exists but table is reset
-		pi_row.idx, pi_row.name = None, None
-		pi_row = doc.append("packed_items", pi_row)
+				else: return False
+		print(f"\033[92m {bundle_item.item_code}")
+		if not found:
+			return False
+	return True
 
-	return pi_row
+def check_if_from_opportunity_option(doc):
+	if doc.supplier_quotations:
+		return True
+
+def reset_packing_list(doc, from_option):
+	"Conditionally reset the table and return if it was reset or not."
+	reset_table = False
+	doc_before_save = doc.get_doc_before_save()
+
+	if doc_before_save:
+		# reset table if:
+		# 1. items were deleted
+		# 2. if bundle item replaced by another item (same no. of items but different items)
+		# we maintain list to track recurring item rows as well
+		items_before_save = [item.item_code for item in doc_before_save.get("items")]
+		items_after_save = [item.item_code for item in doc.get("items")]
+		reset_table = items_before_save != items_after_save
+	else:
+		# reset: if via Update Items OR
+		# if new mapped doc with packed items set (SO -> DN)
+		# (cannot determine action)
+		reset_table = True
+
+	if reset_table and not from_option:
+		doc.set("packed_items", [])
+	elif reset_table and from_option:
+		packeditems = []
+		for item in doc.get("packed_items"):
+			for p_item in doc.get("items"):
+				if item.parent_item == p_item.item_code:
+					packeditems.append(item)
+					break
+
+		doc.set("packed_items", packeditems)
+	return reset_table

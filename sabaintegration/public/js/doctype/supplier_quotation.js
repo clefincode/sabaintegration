@@ -95,6 +95,12 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 		});
 		refresh_field("items");
     },
+    default_margin: function(frm){
+        $.each(frm.items || [], function(i, d) {
+            d.profit_margin = frm.default_margin;
+        });
+        refresh_field("items");
+    },
 });
 
 // for backward compatibility: combine new and previous states
@@ -108,3 +114,13 @@ cur_frm.fields_dict['items'].grid.get_field('project').get_query =
             ]
         }
     }
+
+    frappe.ui.form.on("Supplier Quotation Item",{
+        item_code: function(frm, cdt, cdn){
+            var d = locals[cdt][cdn];
+            if (!d.profit_margin)
+                frappe.model.set_value(cdt, cdn, "profit_margin", frm.doc.default_margin)
+            if (!d.warehouse)
+                frappe.model.set_value(cdt, cdn, "warehouse", frm.doc.default_warehouse)
+        },
+    })

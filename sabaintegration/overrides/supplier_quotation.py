@@ -3,250 +3,177 @@
 
 
 import frappe
+from copy import deepcopy
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import flt, getdate, nowdate
 
-from erpnext.buying.utils import validate_for_items
-from erpnext.controllers.buying_controller import BuyingController
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import SupplierQuotation
-form_grid_templates = {"items": "templates/form_grid/item_grid.html"}
+from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 
+from sabaintegration.overrides.opportunity import add_item_to_table
+class CustomSupplierQuotation(SupplierQuotation):
+    pass
 
-class CustomSupplierQuotation(BuyingController):
-    def validate(self):
-        super(CustomSupplierQuotation, self).validate()
+#@frappe.whitelist()
+# def make_quotation(source_name, target_doc=None):
+#     ###Custom Update
+#     request_for_quotation = frappe.db.get_value("Supplier Quotation Item", {"parent" : source_name}, "request_for_quotation")
+#     if request_for_quotation:
+#         opportunity = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, "opportunity")
+#         opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, "opportunity_option_number")
+#         quotation = frappe.db.get_value("Quotation Item", {
+#             "opportunity": opportunity,
+#             "opportunity_option_number": opportunity_option_number,
+#             "docstatus": 0},
+#             "parent")
+#         if quotation:
+#             doclist =  frappe.get_doc("Quotation", quotation)
+#             if frappe.db.exists("From Supplier Quotation", {"parent": quotation, "supplier_quotation": source_name}):
+#                 return doclist
 
-        if not self.status:
-            self.status = "Draft"
+#         else: 
+#             doclist = get_mapped_doc(
+#             "Supplier Quotation",
+#             source_name,
+#             {
+#                 "Supplier Quotation": {
+#                     "doctype": "Quotation",
+#                     "field_map": {
+#                         "name": "supplier_quotation",
+#                     },
+#                 },
+#             },
+#             target_doc,
+#             )
+#             doclist.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
+            
+#         rfq_doc = frappe.get_doc("Request for Quotation", request_for_quotation)
+#         quotation_items = doclist.get("items") or []
+#         packed_items = doclist.get("packed_items") or []
+#         for row in rfq_doc.items:
+#             qitem = frappe._dict({
+#                 "item_code" : row.item_code,
+#                 "item_name" : row.item_name,
+#                 "description" : row.description,
+#                 "qty" : row.qty,
+#                 "uom" : row.uom,
+#                 "conversion_factor" : row.conversion_factor,
+#                 "warehouse" : row.warehouse,
+#                 "opportunity_option_number": row.opportunity_option_number,
+#                 "opportunity": row.opportunity
+#             })
+#             if frappe.db.exists("Product Bundle", {"new_item_code": row.item_code}):
+#                 product_bundle_items = frappe.get_doc("Product Bundle", {"new_item_code": row.item_code}).items
+#                 qitem["rate"] = qitem["rate_without_profit_margin"] = 0
+#                 sq_items = frappe.get_doc("Supplier Quotation", source_name).items
+#                 found = False
+#                 for product_bundle_item in product_bundle_items:
+#                     for item in sq_items:
+#                         if item.item_code == product_bundle_item.item_code:  
+#                             found = True
+#                             profit_margin = 0
+#                             if item.profit_margin: profit_margin = item.profit_margin / 100            
+#                             qitem["rate"] += (item.rate + (item.rate * profit_margin)) * product_bundle_item.qty 
+#                             qitem["price_list_rate"] = qitem.rate
+#                             qitem["rate_without_profit_margin"] += item.rate * product_bundle_item.qty 
+#                             packed_item = frappe.new_doc("Packed Item")
+#                             packed_item.item_code = product_bundle_item.item_code
+#                             packed_item.parent_item = row.item_code
+#                             packed_item.qty = product_bundle_item.qty * row.qty
+#                             packed_item.uom = product_bundle_item.uom
+#                             packed_item.rate = item.rate + (item.rate * profit_margin)
+#                             packed_item.description = product_bundle_item.description
+#                             packed_item.warehouse = item.warehouse
+#                             packed_items.append(packed_item)
+#                             print(f"\033[93m {packed_item.item_code}")
+#                             print(f"\033[92m {packed_item.rate}")
+#                             break
+#                 if found:
+#                     toaddrow = True
+#                     if quotation:
+#                         for item in doclist.items:
+#                             if item.item_code == row.item_code and item.qty >= row.qty:
+#                                 toaddrow = False
+#                                 item.rate += qitem["rate"]
+#                                 item.price_list_rate += qitem["price_list_rate"]
+#                                 item.rate_without_profit_margin += qitem["rate_without_profit_margin"] 
+#                                 if item.rate_without_profit_margin: item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
+#                                 break
+#                             # elif item.item_code == row.item_code and item.qty < row.qty:
+#                             #     toaddrow = False
+#                             #     item.qty += row.qty - item.qty
+#                             #     item.rate += qitem["rate"]
+#                             #     item.price_list_rate += qitem["price_list_rate"]
+#                             #     item.rate_without_profit_margin += qitem["rate_without_profit_margin"]  
+#                             #     if item.rate_without_profit_margin: item["margin_from_supplier_quotation"] = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
+#                             #     break
+#                     if toaddrow:
+#                         qitem_doc = frappe.new_doc("Quotation Item")
+#                         if qitem["rate_without_profit_margin"] != 0:
+#                             qitem["margin_from_supplier_quotation"] = (qitem["rate"] - qitem["rate_without_profit_margin"]) / qitem["rate_without_profit_margin"] * 100
+                        
+#                         qitem_doc.update(qitem)
+#                         quotation_items.append(qitem_doc)
+                    
 
-        from erpnext.controllers.status_updater import validate_status
+#             elif frappe.db.exists("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}):
+#                 rate = frappe.db.get_value("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}, "rate")
+#                 profit_margin = frappe.db.get_value("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}, "profit_margin")
+#                 if profit_margin: profit_margin = profit_margin / 100 
+#                 qitem["rate"] = rate + (rate * profit_margin)
+#                 qitem["price_list_rate"] = qitem.rate
+#                 qitem["rate_without_profit_margin"]  = rate 
+#                 if qitem["rate_without_profit_margin"] != 0:
+#                     qitem["margin_from_supplier_quotation"] = (qitem["rate"] - qitem["rate_without_profit_margin"]) / qitem["rate_without_profit_margin"] * 100           
+#                 qitem_doc = frappe.new_doc("Quotation Item")
+#                 qitem_doc.update(qitem)
+#                 quotation_items.append(qitem)
 
-        validate_status(self.status, ["Draft", "Submitted", "Stopped", "Cancelled"])
-
-        validate_for_items(self)
-        self.validate_with_previous_doc()
-        self.validate_uom_is_integer("uom", "qty")
-        self.validate_valid_till()
-
-    def on_submit(self):
-        frappe.db.set(self, "status", "Submitted")
-        self.update_rfq_supplier_status(1)
-
-    def on_cancel(self):
-        frappe.db.set(self, "status", "Cancelled")
-        self.update_rfq_supplier_status(0)
-
-    def on_trash(self):
-        pass
-
-    def validate_with_previous_doc(self):
-        super(CustomSupplierQuotation, self).validate_with_previous_doc(
-            {
-                "Material Request": {
-                    "ref_dn_field": "prevdoc_docname",
-                    "compare_fields": [["company", "="]],
-                },
-                "Material Request Item": {
-                    "ref_dn_field": "prevdoc_detail_docname",
-                    "compare_fields": [["item_code", "="], ["uom", "="]],
-                    "is_child_table": True,
-                },
-            }
-        )
-
-    def validate_valid_till(self):
-        if self.valid_till and getdate(self.valid_till) < getdate(self.transaction_date):
-            frappe.throw(_("Valid till Date cannot be before Transaction Date"))
-
-    def update_rfq_supplier_status(self, include_me):
-        rfq_list = set([])
-        for item in self.items:
-            if item.request_for_quotation:
-                rfq_list.add(item.request_for_quotation)
-        for rfq in rfq_list:
-            doc = frappe.get_doc("Request for Quotation", rfq)
-            doc_sup = frappe.get_all(
-                "Request for Quotation Supplier",
-                filters={"parent": doc.name, "supplier": self.supplier},
-                fields=["name", "quote_status"],
-            )
-
-            doc_sup = doc_sup[0] if doc_sup else None
-            if not doc_sup:
-                frappe.throw(
-                    _("Supplier {0} not found in {1}").format(
-                        self.supplier,
-                        "<a href='desk/app/Form/Request for Quotation/{0}'> Request for Quotation {0} </a>".format(
-                            doc.name
-                        ),
-                    )
-                )
-
-            quote_status = _("Received")
-            for item in doc.items:
-                sqi_count = frappe.db.sql(
-                    """
-                    SELECT
-                        COUNT(sqi.name) as count
-                    FROM
-                        `tabSupplier Quotation Item` as sqi,
-                        `tabSupplier Quotation` as sq
-                    WHERE sq.supplier = %(supplier)s
-                        AND sqi.docstatus = 1
-                        AND sq.name != %(me)s
-                        AND sqi.request_for_quotation_item = %(rqi)s
-                        AND sqi.parent = sq.name""",
-                    {"supplier": self.supplier, "rqi": item.name, "me": self.name},
-                    as_dict=1,
-                )[0]
-                self_count = (
-                    sum(my_item.request_for_quotation_item == item.name for my_item in self.items)
-                    if include_me
-                    else 0
-                )
-                if (sqi_count.count + self_count) == 0:
-                    quote_status = _("Pending")
-
-                frappe.db.set_value(
-                    "Request for Quotation Supplier", doc_sup.name, "quote_status", quote_status
-                )
-
-
-def get_list_context(context=None):
-    from erpnext.controllers.website_list_for_contact import get_list_context
-
-    list_context = get_list_context(context)
-    list_context.update(
-        {
-            "show_sidebar": True,
-            "show_search": True,
-            "no_breadcrumbs": True,
-            "title": _("Supplier Quotation"),
-        }
-    )
-
-    return list_context
-
-
-@frappe.whitelist()
-def make_purchase_order(source_name, target_doc=None):
-    def set_missing_values(source, target):
-        target.run_method("set_missing_values")
-        target.run_method("get_schedule_dates")
-        target.run_method("calculate_taxes_and_totals")
-
-    def update_item(obj, target, source_parent):
-        target.stock_qty = flt(obj.qty) * flt(obj.conversion_factor)
-
-    doclist = get_mapped_doc(
-        "Supplier Quotation",
-        source_name,
-        {
-            "Supplier Quotation": {
-                "doctype": "Purchase Order",
-                "validation": {
-                    "docstatus": ["=", 1],
-                },
-            },
-            "Supplier Quotation Item": {
-                "doctype": "Purchase Order Item",
-                "field_map": [
-                    ["name", "supplier_quotation_item"],
-                    ["parent", "supplier_quotation"],
-                    ["material_request", "material_request"],
-                    ["material_request_item", "material_request_item"],
-                    ["sales_order", "sales_order"],
-                ],
-                "postprocess": update_item,
-            },
-            "Purchase Taxes and Charges": {
-                "doctype": "Purchase Taxes and Charges",
-            },
-        },
-        target_doc,
-        set_missing_values,
-    )
-
-    doclist.set_onload("ignore_price_list", True)
-    return doclist
-
+#         from_sq = frappe.new_doc("From Supplier Quotation")
+#         from_sq.supplier_quotation = source_name
+#         from_sq.opportunity = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, "opportunity")
+#         from_sq.opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, "opportunity_option_number")
+#         supplier_quotations = doclist.get("supplier_quotations") or []
+#         supplier_quotations.append(from_sq)
+#         doclist.update({
+#             "items" : quotation_items,
+#             "packed_items": packed_items,
+#             "supplier_quotations": supplier_quotations
+#         })
+#         if quotation: doclist.save()
+#     else:
+#         doclist = get_mapped_doc(
+#         "Supplier Quotation",
+#         source_name,
+#         {
+#             "Supplier Quotation": {
+#                 "doctype": "Quotation",
+#                 "field_map": {
+#                     "name": "supplier_quotation",
+#                 },
+#             },
+#             "Supplier Quotation Item": {
+# 				"doctype": "Quotation Item",
+# 				"condition": lambda doc: frappe.db.get_value("Item", doc.item_code, "is_sales_item") == 1,
+# 				"add_if_empty": True,
+# 			},
+#         },
+#         target_doc,
+#         )
+    
+#     return doclist
+#     ###End Custom Update
 
 @frappe.whitelist()
 def make_quotation(source_name, target_doc=None):
+    def set_missing_values(source, target):
+        target.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
+        target.opportunity = opportunity
+    # If there is no request for quotation linked to this supplier quotation,
+    # then map supplier quotation fields and items to quotation
     request_for_quotation = frappe.db.get_value("Supplier Quotation Item", {"parent" : source_name}, "request_for_quotation")
-    if request_for_quotation:
-        doclist = get_mapped_doc(
-            "Supplier Quotation",
-            source_name,
-            {
-                "Supplier Quotation": {
-                    "doctype": "Quotation",
-                    "field_map": {
-                        "name": "supplier_quotation",
-                    },
-                },
-            },
-            target_doc,
-        )
-        rfq_doc = frappe.get_doc("Request for Quotation", request_for_quotation)
-        quotation_items = []
-        packed_items = []
-        for row in rfq_doc.items:
-            qitem = frappe._dict({
-                "item_code" : row.item_code,
-                "item_name" : row.item_name,
-                "description" : row.description,
-                "qty" : row.qty,
-                "uom" : row.uom,
-                "conversion_factor" : row.conversion_factor,
-                "warehouse" : row.warehouse,
-            })
-            if frappe.db.exists("Product Bundle", {"new_item_code": row.item_code}):
-                product_bundle_items = frappe.get_doc("Product Bundle", {"new_item_code": row.item_code}).items
-                qitem["rate"] = 0
-                sq_items = frappe.get_doc("Supplier Quotation", source_name).items
-                found = False
-                for product_bundle_item in product_bundle_items:
-                    for item in sq_items:
-                        if item.item_code == product_bundle_item.item_code:  
-                            found = True
-                            pr = frappe.db.get_value("Request for Quotation Packed Item", {"parent": request_for_quotation, "item_code": item.item_code}, "profit_margin")
-                            profit_margin = 0
-                            if pr: profit_margin = pr / 100            
-                            qitem["rate"] += (item.rate + (item.rate * profit_margin)) * product_bundle_item.qty
-                            qitem["price_list_rate"] = qitem.rate
-                            packed_item = frappe.new_doc("Packed Item")
-                            packed_item.item_code = product_bundle_item.item_code
-                            packed_item.parent_item = row.item_code
-                            packed_item.qty = product_bundle_item.qty * row.qty
-                            packed_item.uom = product_bundle_item.uom
-                            packed_item.rate = item.rate + (item.rate * profit_margin)
-                            packed_item.description = product_bundle_item.description
-                            packed_items.append(packed_item)
-                            break
-                if found:
-                    qitem_doc = frappe.new_doc("Quotation Item")
-                    qitem_doc.update(qitem)
-                    quotation_items.append(qitem_doc)
-            elif frappe.db.exists("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}):
-                rate = frappe.db.get_value("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}, "rate")
-                pr = frappe.db.get_value("Request for Quotation", request_for_quotation, "default_profit_margin")
-                profit_margin = 0
-                if pr: profit_margin = pr / 100 
-                qitem["rate"] = rate + (rate * profit_margin)
-                qitem["price_list_rate"] = qitem.rate
-                qitem_doc = frappe.new_doc("Quotation Item")
-                qitem_doc.update(qitem)
-                quotation_items.append(qitem)
-
-        doclist.update({
-            "items" : quotation_items,
-            "packed_items": packed_items
-        })
-        frappe.db.commit()
-    else:
-        doclist = get_mapped_doc(
+    if not request_for_quotation:
+        return get_mapped_doc(
         "Supplier Quotation",
         source_name,
         {
@@ -261,19 +188,131 @@ def make_quotation(source_name, target_doc=None):
 				"condition": lambda doc: frappe.db.get_value("Item", doc.item_code, "is_sales_item") == 1,
 				"add_if_empty": True,
 			},
+            "Purchase Taxes and Charges": {
+                "doctype": "Purchase Taxes and Charges",
+            }
         },
         target_doc,
-    )
-    return doclist
+        )
+    
+    else:
+        # Get opportunity and option number linked to the request for quotation
+        # if there is quotation linked to the opportunity, 
+        # open the quotation to add the supplier quotatiuon items to it
+        opportunity, opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, ["opportunity", "opportunity_option_number"])
+        quotation = frappe.db.get_value("Quotation Item", {
+            "opportunity": opportunity,
+            "opportunity_option_number": opportunity_option_number,
+            "docstatus": 0},
+            "parent")
+        if quotation and opportunity:
+            doclist =  frappe.get_doc("Quotation", quotation)
 
+            # if there is an already quotation from this supplier quotation, return quotation
+            if frappe.db.exists("From Supplier Quotation", {"parent": quotation, "supplier_quotation": source_name}):
+                return doclist
+        else: 
+            doclist = get_mapped_doc(
+                "Supplier Quotation",
+                source_name,
+                {
+                    "Supplier Quotation": {
+                        "doctype": "Quotation",
+                        "field_map": {
+                            "name": "supplier_quotation",
+                        },
+                    },
+                    "Purchase Taxes and Charges": {
+                        "doctype": "Sales Taxes and Charges",
+                    }
+                },
+                target_doc,
+                set_missing_values,
+                )
 
-def set_expired_status():
-    frappe.db.sql(
-        """
-        UPDATE
-            `tabSupplier Quotation` SET `status` = 'Expired'
-        WHERE
-            `status` not in ('Cancelled', 'Stopped') AND `valid_till` < %s
-        """,
-        (nowdate()),
-    )
+        rfq_doc = frappe.get_doc("Request for Quotation", request_for_quotation)
+        quotation_items = [item.item_code for item in doclist.get("items")] or []
+
+        # iterate through items in request for quotation items
+        for row in rfq_doc.items:
+
+            # if the item is a product bundle item,
+            # iterate through supplier quotation items to add its items in the quotation
+            if frappe.db.exists("Product Bundle", {"new_item_code": row.item_code}):
+                total_rate = total_rate_with_margin = 0
+                sq_items = frappe.get_doc("Supplier Quotation", source_name).items
+                found = False
+
+                # for each packed item, if the item is in the supplier quotation items,
+                # add it to the packed_items table in the quotation
+                for product_bundle_item in get_product_bundle_items(row.item_code):
+                    for item in sq_items:
+                        if item.item_code == product_bundle_item.item_code:  
+                            found = True
+                            packed_item = deepcopy(item)
+                            packed_item.qty = product_bundle_item.qty * row.qty
+                            rate = item.rate + (item.rate * item.profit_margin / 100) # rate of the item is with respect to its margin
+                            fields = {
+                                "parent_item": row.item_code,
+                                "rate": rate,
+                                "conversion_factor": 1.00
+                            }
+                            add_item_to_table(packed_item, "packed_items", doclist, fields)
+
+                            # calculate the total rate of the product bundle
+                            total_rate += item.rate * product_bundle_item.qty
+                            total_rate_with_margin += rate * product_bundle_item.qty
+                            break
+                # if there is at least one packed item that has added 
+                # and the product bundle is not in the quotation items, then add the item
+                # margin_from_supplier_quotation is the overall margine for this item
+                if found and not row.item_code in quotation_items:
+                    fields = {
+                        "rate": total_rate_with_margin,
+                        "rate_without_profit_margin": total_rate,
+                        "price_list_rate": total_rate_with_margin,
+                        "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100,
+                        "opportunity_option_number": row.opportunity_option_number,
+                        "opportunity": row.opportunity
+                    }
+                    add_item_to_table(row, "items", doclist, fields)
+                
+                # if it's already in the items table then update the rates only
+                elif found and row.item_code in quotation_items:
+                    for item in doclist.get("items"):
+                        if item.item_code == row.item_code:
+                            item.rate += total_rate_with_margin
+                            item.rate_without_profit_margin += total_rate
+                            item.price_list_rate += total_rate_with_margin
+                            if item.rate_without_profit_margin: 
+                                item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
+            
+            # if item is not a product bundle then add it to items table
+            # and it's present in the supplier quotation
+            elif frappe.db.exists("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}):
+                rate, profit_margin = frappe.db.get_value("Supplier Quotation Item", {"parent": source_name, "item_code": row.item_code}, ["rate", "profit_margin"])
+                rate_with_profit_margin = rate + (rate * profit_margin / 100)
+                print(f"\033[93m {row.item_code}")
+                fields = {
+                    "rate": rate_with_profit_margin,
+                    "price_list_rate": rate_with_profit_margin,
+                    "rate_without_profit_margin": rate,
+                    "margin_from_supplier_quotation": profit_margin,
+                    "opportunity_option_number": row.opportunity_option_number,
+                    "opportunity": row.opportunity
+                }
+                add_item_to_table(row, "items", doclist, fields)
+
+        add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
+        
+        if quotation: doclist.save()
+
+        return doclist
+
+def add_supplier_quotation_row(supplier_quotation, opportunity, opportunity_option_number, doc):
+    "add record of the supplier quotation in the quotation"
+    from_sq = frappe.new_doc("From Supplier Quotation")
+    from_sq.supplier_quotation = supplier_quotation
+    from_sq.opportunity = opportunity
+    from_sq.opportunity_option_number = opportunity_option_number
+    doc.append("supplier_quotations", from_sq)

@@ -2,59 +2,56 @@ import json
 
 import frappe
 from frappe import _
-from frappe.email.inbox import link_communication_to_document
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import cint, cstr, get_fullname
-
-from erpnext.accounts.party import get_party_account_currency
-from erpnext.setup.utils import get_exchange_rate
-from erpnext.utilities.transaction_base import TransactionBase
+from frappe.utils import cint
 
 from erpnext.crm.doctype.opportunity.opportunity import Opportunity
+from frappe.utils import nowdate
 
-### Custom Update bundle_items on opportunity
+from sabaintegration.stock.get_item_details import get_item_warehouse
+
 class CustomOpportunity(Opportunity):
-    ###Custom Update
     @frappe.whitelist()
     def group_similar_bundle_items(self):
+        """group packed items with the same item code in one row
+        with the sum of the quatities"""
         import copy
         group_items= {}
+        brand_list = {}
         #parent_items= {}
         count = 0
-        bundles = copy.deepcopy(self.parent_items)
-
-        for item in bundles:
+        bundles = []
+        for item in self.parent_items:
             if not item.qty : item.qty = 0
             group_items[item.item_code] = group_items.get(item.item_code, 0) + item.qty
+            brand_list[item.item_code] = frappe.db.get_value("Item", item.item_code, "brand")
             #parent_items[item.item_code] =parent_items.get(item.item_code, '') + "<a href='/app/item/"+item.parent_item+"' data-doctype='Item' target='_blank' data-name='"+item.parent_item+"' data-original-title='' title=''>"+item.parent_item+"</a> <br>"  
-            
-        duplicate_list = []
-        for item in bundles:
-            key = item.item_code
-            if key in group_items:
-                count += 1
-                item.qty = group_items[key]
-                
-                # if item.get("parent_item"):
-                #item.parent_item=  parent_items[key]
-                # item.parent_item="app/item/"
 
+        brand_list = sorted(brand_list.items(), key=lambda x:x[1]) 
+        for item in brand_list:
+            bundles.append({
+                "item_code": item[0],
+                "qty": group_items[item[0]],
+                "uom": frappe.db.get_value("Item", item[0], "stock_uom"),
+                "description": frappe.db.get_value("Item", item[0], "description"),
+                "brand": item[1],
+                "warehouse": get_item_warehouse(frappe.get_doc("Item", item[0]), args = frappe._dict({"company": self.company}), overwrite_warehouse = True)
+            })
+        # duplicate_list = []
+        # for item in bundles:
+        #     key = item.item_code
+        #     if key in group_items:
+        #         count += 1
+        #         item.qty = group_items[key]                
+        #         item.idx = count
+        #         del group_items[key]
+        #     else:
+        #         duplicate_list.append(item)
                 
-                item.idx = count
-                del group_items[key]
-            else:
-                
-                duplicate_list.append(item)
-                
-        for item in duplicate_list:
-            bundles.remove(item)
-            
+        # for item in duplicate_list:
+        #     bundles.remove(item)
+        #print(f"\033[92m {bundles}")
         return bundles
-    ###End Custom Update
-
-    def after_insert(self):
-        if self.opportunity_from == "Lead":
-            frappe.get_doc("Lead", self.party_name).set_status(update=True)
 
     def validate(self):
         self._prev = frappe._dict(
@@ -81,196 +78,53 @@ class CustomOpportunity(Opportunity):
         if not self.with_items:
             self.items = []
 
-    def map_fields(self):
-        for field in self.meta.fields:
-            if not self.get(field.fieldname):
-                try:
-                    value = frappe.db.get_value(self.opportunity_from, self.party_name, field.fieldname)
-                    frappe.db.set(self, field.fieldname, value)
-                except Exception:
-                    continue
+        self.set_option_number() ###Custmo Update
 
-    def make_new_lead_if_required(self):
-        """Set lead against new opportunity"""
-        if (not self.get("party_name")) and self.contact_email:
-            # check if customer is already created agains the self.contact_email
-            customer = frappe.db.sql(
-                """select
-                distinct `tabDynamic Link`.link_name as customer
-                from
-                    `tabContact`,
-                    `tabDynamic Link`
-                where `tabContact`.email_id='{0}'
-                and
-                    `tabContact`.name=`tabDynamic Link`.parent
-                and
-                    ifnull(`tabDynamic Link`.link_name, '')<>''
-                and
-                    `tabDynamic Link`.link_doctype='Customer'
-            """.format(
-                    self.contact_email
-                ),
-                as_dict=True,
-            )
-            if customer and customer[0].customer:
-                self.party_name = customer[0].customer
-                self.opportunity_from = "Customer"
-                return
-
-            lead_name = frappe.db.get_value("Lead", {"email_id": self.contact_email})
-            if not lead_name:
-                sender_name = get_fullname(self.contact_email)
-                if sender_name == self.contact_email:
-                    sender_name = None
-
-                if not sender_name and ("@" in self.contact_email):
-                    email_name = self.contact_email.split("@")[0]
-
-                    email_split = email_name.split(".")
-                    sender_name = ""
-                    for s in email_split:
-                        sender_name += s.capitalize() + " "
-
-                lead = frappe.get_doc(
-                    {"doctype": "Lead", "email_id": self.contact_email, "lead_name": sender_name or "Unknown"}
-                )
-
-                lead.flags.ignore_email_validation = True
-                lead.insert(ignore_permissions=True)
-                lead_name = lead.name
-
-            self.opportunity_from = "Lead"
-            self.party_name = lead_name
-
-    @frappe.whitelist()
-    def declare_enquiry_lost(self, lost_reasons_list, detailed_reason=None):
-        if not self.has_active_quotation():
-            frappe.db.set(self, "status", "Lost")
-
-            if detailed_reason:
-                frappe.db.set(self, "order_lost_reason", detailed_reason)
-
-            for reason in lost_reasons_list:
-                self.append("lost_reasons", reason)
-
-            self.save()
-
-        else:
-            frappe.throw(_("Cannot declare as lost, because Quotation has been made."))
-
-    def on_trash(self):
-        self.delete_events()
-
-    def has_active_quotation(self):
-        if not self.with_items:
-            return frappe.get_all(
-                "Quotation",
-                {"opportunity": self.name, "status": ("not in", ["Lost", "Closed"]), "docstatus": 1},
-                "name",
-            )
-        else:
-            return frappe.db.sql(
-                """
-                select q.name
-                from `tabQuotation` q, `tabQuotation Item` qi
-                where q.name = qi.parent and q.docstatus=1 and qi.prevdoc_docname =%s
-                and q.status not in ('Lost', 'Closed')""",
-                self.name,
-            )
-
-    def has_ordered_quotation(self):
-        if not self.with_items:
-            return frappe.get_all(
-                "Quotation", {"opportunity": self.name, "status": "Ordered", "docstatus": 1}, "name"
-            )
-        else:
-            return frappe.db.sql(
-                """
-                select q.name
-                from `tabQuotation` q, `tabQuotation Item` qi
-                where q.name = qi.parent and q.docstatus=1 and qi.prevdoc_docname =%s
-                and q.status = 'Ordered'""",
-                self.name,
-            )
-
-    def has_lost_quotation(self):
-        lost_quotation = frappe.db.sql(
-            """
-            select name
-            from `tabQuotation`
-            where docstatus=1
-                and opportunity =%s and status = 'Lost'
-            """,
-            self.name,
-        )
-        if lost_quotation:
-            if self.has_active_quotation():
-                return False
-            return True
-
-    def validate_cust_name(self):
-        if self.party_name and self.opportunity_from == "Customer":
-            self.customer_name = frappe.db.get_value("Customer", self.party_name, "customer_name")
-        elif self.party_name and self.opportunity_from == "Lead":
-            lead_name, company_name = frappe.db.get_value(
-                "Lead", self.party_name, ["lead_name", "company_name"]
-            )
-            self.customer_name = company_name or lead_name
-
-    def on_update(self):
-        self.add_calendar_event()
-
-    def add_calendar_event(self, opts=None, force=False):
-        if not opts:
-            opts = frappe._dict()
-
-        opts.description = ""
-        opts.contact_date = self.contact_date
-
-        if self.party_name and self.opportunity_from == "Customer":
-            if self.contact_person:
-                opts.description = "Contact " + cstr(self.contact_person)
-            else:
-                opts.description = "Contact customer " + cstr(self.party_name)
-        elif self.party_name and self.opportunity_from == "Lead":
-            if self.contact_display:
-                opts.description = "Contact " + cstr(self.contact_display)
-            else:
-                opts.description = "Contact lead " + cstr(self.party_name)
-
-        opts.subject = opts.description
-        opts.description += ". By : " + cstr(self.contact_by)
-
-        if self.to_discuss:
-            opts.description += " To Discuss : " + cstr(self.to_discuss)
-
-        super(Opportunity, self).add_calendar_event(opts, force)
-
-    def validate_item_details(self):
-        if not self.get("items"):
-            return
-
-        # set missing values
-        item_fields = ("item_name", "description", "item_group", "brand")
-
-        for d in self.items:
-            if not d.item_code:
-                continue
-
-            item = frappe.db.get_value("Item", d.item_code, item_fields, as_dict=True)
-            for key in item_fields:
-                if not d.get(key):
-                    d.set(key, item.get(key))
-
-
+    def set_option_number(self):
+        "set the option field in each option if it's null"
+        if self.option_1:
+            for op in self.option_1:
+                if not op.option_number: op.option_number = 1
+        if self.option_2:
+            for op in self.option_2:
+                if not op.option_number: op.option_number = 2 
+        if self.option_3:
+            for op in self.option_3:
+                if not op.option_number: op.option_number = 3
+        if self.option_4:
+            for op in self.option_4:
+                if not op.option_number: op.option_number = 4
+        if self.option_5:
+            for op in self.option_5:
+                if not op.option_number: op.option_number = 5
+        if self.option_6:
+            for op in self.option_6:
+                if not op.option_number: op.option_number = 6
+        if self.option_7:
+            for op in self.option_7:
+                if not op.option_number: op.option_number = 7
+        if self.option_8:
+            for op in self.option_8:
+                if not op.option_number: op.option_number = 8
+        if self.option_9:
+            for op in self.option_9:
+                if not op.option_number: op.option_number = 9
+        if self.option_10:
+            for op in self.option_10:
+                if not op.option_number: op.option_number = 10
+    
 @frappe.whitelist()
-def get_item_details(item_code):
+def get_item_details(item_code, company = None):
+    """get item_name, uom, description, image, item_group,
+     brand and warehouse of the item"""
     item = frappe.db.sql(
         """select item_name, stock_uom, image, description, item_group, brand
         from `tabItem` where name = %s""",
         item_code,
         as_dict=1,
     )
+    warehouse = ""
+    if company: warehouse = get_item_warehouse(frappe.get_doc("Item", item_code), args = frappe._dict({"company": company}), overwrite_warehouse = True)
     return {
         "item_name": item and item[0]["item_name"] or "",
         "uom": item and item[0]["stock_uom"] or "",
@@ -278,228 +132,124 @@ def get_item_details(item_code):
         "image": item and item[0]["image"] or "",
         "item_group": item and item[0]["item_group"] or "",
         "brand": item and item[0]["brand"] or "",
+        "warehouse": warehouse or ""
     }
-
-
-@frappe.whitelist()
-def make_quotation(source_name, target_doc=None):
-    def set_missing_values(source, target):
-        from erpnext.controllers.accounts_controller import get_default_taxes_and_charges
-
-        quotation = frappe.get_doc(target)
-
-        company_currency = frappe.get_cached_value("Company", quotation.company, "default_currency")
-
-        if quotation.quotation_to == "Customer" and quotation.party_name:
-            party_account_currency = get_party_account_currency(
-                "Customer", quotation.party_name, quotation.company
-            )
-        else:
-            party_account_currency = company_currency
-
-        quotation.currency = party_account_currency or company_currency
-
-        if company_currency == quotation.currency:
-            exchange_rate = 1
-        else:
-            exchange_rate = get_exchange_rate(
-                quotation.currency, company_currency, quotation.transaction_date, args="for_selling"
-            )
-
-        quotation.conversion_rate = exchange_rate
-
-        # get default taxes
-        taxes = get_default_taxes_and_charges(
-            "Sales Taxes and Charges Template", company=quotation.company
-        )
-        if taxes.get("taxes"):
-            quotation.update(taxes)
-
-        quotation.run_method("set_missing_values")
-        quotation.run_method("calculate_taxes_and_totals")
-        if not source.with_items:
-            quotation.opportunity = source.name
-
-    doclist = get_mapped_doc(
-        "Opportunity",
-        source_name,
-        {
-            "Opportunity": {
-                "doctype": "Quotation",
-                "field_map": {
-                    "opportunity_from": "quotation_to",
-                    "name": "enq_no",
-                },
-            },
-            "Opportunity Item": {
-                "doctype": "Quotation Item",
-                "field_map": {
-                    "parent": "prevdoc_docname",
-                    "parenttype": "prevdoc_doctype",
-                    "uom": "stock_uom",
-                },
-                "add_if_empty": True,
-            },
-        },
-        target_doc,
-        set_missing_values,
-    )
-
-    return doclist
-
 
 @frappe.whitelist()
 def make_request_for_quotation(source_name, target_doc=None):
     def update_item(obj, target, source_parent):
         target.conversion_factor = 1.0
-    ###Custom Update
-    doclist = get_mapped_doc(
-        "Opportunity",
-        source_name,
-        {
-            "Opportunity": {
-                "doctype": "Request for Quotation",
-                },
-            "Opportunity Packed Item": {
-                "doctype": "Request for Quotation Packed Item",
-                "field_map": [["name", "opportunity_packed_item"], ["parent", "opportunity"], ["uom", "uom"]],
-                "postprocess": update_item,
+
+    op_num = frappe.db.get_value("Opportunity Item", {"parent": source_name}, "option_number")
+    
+    if not frappe.db.exists("Request for Quotation Item", {"opportunity": source_name, "opportunity_option_number": op_num, "docstatus": ("!=", 2)}):
+        doclist = get_mapped_doc(
+            "Opportunity",
+            source_name,
+            {
+                "Opportunity": {
+                    "doctype": "Request for Quotation",
+                    },
+                "Opportunity Item":{
+                    "doctype": "Request for Quotation Item",
+                    "field_map": [ ["parent", "opportunity"], ["uom", "uom"], ["option_number", "opportunity_option_number"]],
+                    "postprocess": update_item,
+                }
             },
-            "Opportunity Item":{
-                "doctype": "Request for Quotation Item",
-                "field_map": [["name", "opportunity_item"], ["parent", "opportunity"], ["uom", "uom"]],
-                "postprocess": update_item,
+            target_doc,
+        )
+        doclist.update({"packed_items" : doclist.make_packing_list()})
+    else:
+        
+        doclist = get_mapped_doc(
+            "Opportunity",
+            source_name,
+            {
+                "Opportunity": {
+                    "doctype": "Request for Quotation",
+                    },
             }
-        },
-        target_doc,
-    )
-    for item in doclist.packed_items:
-        item.brand = frappe.db.get_value("Item", item.item_code, "brand")
-    ###End Custom Update
-    return doclist
+        )
+        req_packed_items = frappe.db.sql("""
+        select packed_item.item_code, packed_item.qty, rfg.name
+        from `tabRequest for Quotation Item` as item
+        inner join `tabRequest for Quotation` as rfg on rfg.name = item.parent
+        inner join `tabRequest for Quotation Packed Item` as packed_item on packed_item.parent = rfg.name 
+        where item.opportunity = '{0}' and item.opportunity_option_number = {1} and item.docstatus != 2
+        group by packed_item.item_code
+        """.format(source_name, op_num), as_dict = 1)
 
+        opportunity = frappe.get_doc("Opportunity", source_name)
+        bundles = opportunity.group_similar_bundle_items()
 
-@frappe.whitelist()
-def make_customer(source_name, target_doc=None):
-    def set_missing_values(source, target):
-        target.opportunity_name = source.name
+        for bundle in bundles:
+            found = False
+            for packed_item in req_packed_items:
+                if packed_item.item_code == bundle.get("item_code") and packed_item.qty == bundle.get("qty"):
+                    found = True
+                    break
+            #print(f"\033[93m {bundle.get('item_code')}")
+            
+            if not found:
+                add_item_to_table(bundle, "packed_items", doclist)
 
-        if source.opportunity_from == "Lead":
-            target.lead_name = source.party_name
+                items = frappe.db.get_all("Opportunity Packed Parent Item", {"parent":source_name, "item_code": bundle.get("item_code")}, ["parent_item"])
+                for item in items:
+                    item = frappe.get_doc("Opportunity Item", {"parent": source_name, "item_code":item.parent_item})
+                    toadd = True
+                    for ritem in doclist.get("items"):
+                        if ritem.item_code == item.item_code:
+                            toadd = False
+                            break
+                    if toadd:
+                        fields = {
+                            "stock_uom": item.uom,
+                            "conversion_factor": 1.00,
+                            "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
+                            "opportunity": item.parent,
+                            "opportunity_option_number": item.option_number
+                        }
+                        add_item_to_table(item, "items", doclist, fields)
 
-    doclist = get_mapped_doc(
-        "Opportunity",
-        source_name,
-        {
-            "Opportunity": {
-                "doctype": "Customer",
-                "field_map": {"currency": "default_currency", "customer_name": "customer_name"},
+        items = frappe.db.sql("""
+        select item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
+        item.description, item.brand, item.image, item.parent, item.option_number
+        from `tabItem`
+        inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
+        left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
+        where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and rfqi.item_code is null 
+        """.format(source_name), as_dict = 1)
+
+        for item in items:
+            fields = {
+                "stock_uom": item.uom,
+                "conversion_factor": 1.00,
+                "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
+                "opportunity": item.parent,
+                "opportunity_option_number": item.option_number
             }
-        },
-        target_doc,
-        set_missing_values,
-    )
-
+            add_item_to_table(item, "items", doclist, fields)
+        
     return doclist
 
-
-@frappe.whitelist()
-def make_supplier_quotation(source_name, target_doc=None):
-    doclist = get_mapped_doc(
-        "Opportunity",
-        source_name,
-        {
-            "Opportunity": {"doctype": "Supplier Quotation", "field_map": {"name": "opportunity"}},
-            "Opportunity Item": {"doctype": "Supplier Quotation Item", "field_map": {"uom": "stock_uom"}},
-        },
-        target_doc,
-    )
-
-    return doclist
-
-
-@frappe.whitelist()
-def set_multiple_status(names, status):
-    names = json.loads(names)
-    for name in names:
-        opp = frappe.get_doc("Opportunity", name)
-        opp.status = status
-        opp.save()
-
-
-def auto_close_opportunity():
-    """auto close the `Replied` Opportunities after 7 days"""
-    auto_close_after_days = (
-        frappe.db.get_single_value("Selling Settings", "close_opportunity_after_days") or 15
-    )
-
-    opportunities = frappe.db.sql(
-        """ select name from tabOpportunity where status='Replied' and
-        modified<DATE_SUB(CURDATE(), INTERVAL %s DAY) """,
-        (auto_close_after_days),
-        as_dict=True,
-    )
-
-    for opportunity in opportunities:
-        doc = frappe.get_doc("Opportunity", opportunity.get("name"))
-        doc.status = "Closed"
-        doc.flags.ignore_permissions = True
-        doc.flags.ignore_mandatory = True
-        doc.save()
-
-
-@frappe.whitelist()
-def make_opportunity_from_communication(communication, company, ignore_communication_links=False):
-    from erpnext.crm.doctype.lead.lead import make_lead_from_communication
-
-    doc = frappe.get_doc("Communication", communication)
-
-    lead = doc.reference_name if doc.reference_doctype == "Lead" else None
-    if not lead:
-        lead = make_lead_from_communication(communication, ignore_communication_links=True)
-
-    opportunity_from = "Lead"
-
-    opportunity = frappe.get_doc(
-        {
-            "doctype": "Opportunity",
-            "company": company,
-            "opportunity_from": opportunity_from,
-            "party_name": lead,
-        }
-    ).insert(ignore_permissions=True)
-
-    link_communication_to_document(doc, "Opportunity", opportunity.name, ignore_communication_links)
-
-    return opportunity.name
-
-
-@frappe.whitelist()
-def get_events(start, end, filters=None):
-    """Returns events for Gantt / Calendar view rendering.
-    :param start: Start date-time.
-    :param end: End date-time.
-    :param filters: Filters (JSON).
-    """
-    from frappe.desk.calendar import get_event_conditions
-
-    conditions = get_event_conditions("Opportunity", filters)
-
-    data = frappe.db.sql(
-        """
-        select
-            distinct `tabOpportunity`.name, `tabOpportunity`.customer_name, `tabOpportunity`.opportunity_amount,
-            `tabOpportunity`.title, `tabOpportunity`.contact_date
-        from
-            `tabOpportunity`
-        where
-            (`tabOpportunity`.contact_date between %(start)s and %(end)s)
-            {conditions}
-        """.format(
-            conditions=conditions
-        ),
-        {"start": start, "end": end},
-        as_dict=True,
-        update={"allDay": 0},
-    )
-    return data
+def add_item_to_table(item, table = None, doc = None, other_fields = None):
+    """add item to table in a doctype
+    the default fields are item_code, item_name, qty, uom, warehouse,
+    description and brand. to add other fields, you can send a dict
+    with the other_fields paremater"""
+    fields = {
+            "item_code":item.get("item_code"),
+            "item_name":item.get("item_name"),
+            "qty": item.get("qty"),
+            "uom":item.get("uom") or frappe.db.get_value("Item", item.get("item_code"), "uom"),
+            "warehouse":item.get("warehouse") or frappe.db.get_value("Item Default", {"parent" : item.get("item_code")}, "default_warehouse"),
+            "description":item.get("description") or frappe.db.get_value("Item", item.get("item_code"), "description"),
+            "brand": item.get("brand") or frappe.db.get_value("Item", item.get("item_code"), "brand"),
+            }
+    if other_fields:
+        for field_name in other_fields:
+            fields[field_name] = other_fields[field_name]
+    
+    if doc and table: doc.append(table, fields) # If doctype has table
+    elif doc and not table: doc.append(fields) # If doctype is child table
+    else: table.append(fields) # if it's not a doctype (just a list)
