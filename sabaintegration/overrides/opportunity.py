@@ -79,7 +79,7 @@ class CustomOpportunity(Opportunity):
         if not self.with_items:
             self.items = []
 
-        self.validate_items() ###Custom Update
+        #self.validate_items() ###Custom Update
         self.set_option_number() ###Custmo Update
 
     def validate_items(self):
