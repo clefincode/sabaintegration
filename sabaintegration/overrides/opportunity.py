@@ -5,6 +5,7 @@ from frappe import _
 from frappe.model.mapper import get_mapped_doc
 from frappe.utils import cint
 
+from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 from erpnext.crm.doctype.opportunity.opportunity import Opportunity
 from frappe.utils import nowdate
 
@@ -78,7 +79,30 @@ class CustomOpportunity(Opportunity):
         if not self.with_items:
             self.items = []
 
+        self.validate_items() ###Custom Update
         self.set_option_number() ###Custmo Update
+
+    def validate_items(self):
+        def _get_msg(row_num, msg):
+            return _("Row # {0}:").format(row_num + 1) + " " + msg
+        
+        self.validation_messages = []
+        items = []
+        for row_num, row in enumerate(self.items):
+            # find duplicates
+            key = [row.item_code]
+
+            if key in items:
+                self.validation_messages.append(_get_msg(row_num, _("Duplicate entry")))
+            else:
+                items.append(key)
+        errmsg = ""
+        if self.validation_messages:
+            for msg in self.validation_messages:
+                errmsg += msg + "<br>"
+        if errmsg: 
+            frappe.msgprint(errmsg)
+            raise frappe.ValidationError(self.validation_messages)
 
     def set_option_number(self):
         "set the option field in each option if it's null"
@@ -141,7 +165,6 @@ def make_request_for_quotation(source_name, target_doc=None):
         target.conversion_factor = 1.0
 
     op_num = frappe.db.get_value("Opportunity Item", {"parent": source_name}, "option_number")
-    
     if not frappe.db.exists("Request for Quotation Item", {"opportunity": source_name, "opportunity_option_number": op_num, "docstatus": ("!=", 2)}):
         doclist = get_mapped_doc(
             "Opportunity",
@@ -171,23 +194,37 @@ def make_request_for_quotation(source_name, target_doc=None):
             }
         )
         req_packed_items = frappe.db.sql("""
-        select packed_item.item_code, packed_item.qty, rfg.name
+        select packed_item.item_code, packed_item.qty, rfg.name as parent
         from `tabRequest for Quotation Item` as item
         inner join `tabRequest for Quotation` as rfg on rfg.name = item.parent
         inner join `tabRequest for Quotation Packed Item` as packed_item on packed_item.parent = rfg.name 
         where item.opportunity = '{0}' and item.opportunity_option_number = {1} and item.docstatus != 2
-        group by packed_item.item_code
+        group by packed_item.item_code, packed_item.qty
         """.format(source_name, op_num), as_dict = 1)
 
         opportunity = frappe.get_doc("Opportunity", source_name)
         bundles = opportunity.group_similar_bundle_items()
-
         for bundle in bundles:
             found = False
+            existsitems = []
             for packed_item in req_packed_items:
                 if packed_item.item_code == bundle.get("item_code") and packed_item.qty == bundle.get("qty"):
                     found = True
                     break
+                elif packed_item.item_code == bundle.get("item_code") and packed_item.qty < bundle.get("qty"):
+                    bundle["qty"] -= packed_item.qty
+                    if bundle.get("qty") == 0:
+                        found = True
+                        break
+                    items = frappe.db.get_all("Request for Quotation Item", {"parent" : packed_item.parent}, ["item_code"])
+                    for item in items:
+                        if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+                            for bundle_item in get_product_bundle_items(item.item_code):
+                                if bundle_item.item_code == packed_item.item_code:
+                                    existsitems.append(item.item_code)
+                                    break
+                    
+                    
             #print(f"\033[93m {bundle.get('item_code')}")
             
             if not found:
@@ -195,6 +232,8 @@ def make_request_for_quotation(source_name, target_doc=None):
 
                 items = frappe.db.get_all("Opportunity Packed Parent Item", {"parent":source_name, "item_code": bundle.get("item_code")}, ["parent_item"])
                 for item in items:
+                    if (item.parent_item in existsitems): continue
+                    
                     item = frappe.get_doc("Opportunity Item", {"parent": source_name, "item_code":item.parent_item})
                     toadd = True
                     for ritem in doclist.get("items"):
@@ -203,7 +242,7 @@ def make_request_for_quotation(source_name, target_doc=None):
                             break
                     if toadd:
                         fields = {
-                            "stock_uom": item.uom,
+                            "stock_uom": item.uom or item.get("stock_uom") or frappe.db.get_value("Item", item.get("item_code"), "stock_uom"),
                             "conversion_factor": 1.00,
                             "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
                             "opportunity": item.parent,
@@ -222,7 +261,7 @@ def make_request_for_quotation(source_name, target_doc=None):
 
         for item in items:
             fields = {
-                "stock_uom": item.uom,
+                "stock_uom": item.uom or item.get("stock_uom") or frappe.db.get_value("Item", item.get("item_code"), "stock_uom"),
                 "conversion_factor": 1.00,
                 "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
                 "opportunity": item.parent,
@@ -241,7 +280,7 @@ def add_item_to_table(item, table = None, doc = None, other_fields = None):
             "item_code":item.get("item_code"),
             "item_name":item.get("item_name"),
             "qty": item.get("qty"),
-            "uom":item.get("uom") or frappe.db.get_value("Item", item.get("item_code"), "uom"),
+            "uom":item.get("uom") or item.get("stock_uom") or frappe.db.get_value("Item", item.get("item_code"), "stock_uom"),
             "warehouse":item.get("warehouse") or frappe.db.get_value("Item Default", {"parent" : item.get("item_code")}, "default_warehouse"),
             "description":item.get("description") or frappe.db.get_value("Item", item.get("item_code"), "description"),
             "brand": item.get("brand") or frappe.db.get_value("Item", item.get("item_code"), "brand"),

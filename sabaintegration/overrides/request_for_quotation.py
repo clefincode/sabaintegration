@@ -6,22 +6,14 @@ import json
 
 import frappe
 from frappe import _
-from frappe.core.doctype.communication.email import make
-from frappe.desk.form.load import get_attachments
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import get_url
-from frappe.utils.print_format import download_pdf
-from frappe.utils.user import get_user_fullname
-from six import string_types
 
 from erpnext.accounts.party import get_party_account_currency, get_party_details
 from erpnext.buying.utils import validate_for_items
-from erpnext.controllers.buying_controller import BuyingController
 from erpnext.stock.doctype.material_request.material_request import set_missing_values
 from erpnext.buying.doctype.request_for_quotation.request_for_quotation import RequestforQuotation
 from sabaintegration.stock.get_item_details import get_item_warehouse
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
-STANDARD_USERS = ("Guest", "Administrator")
 
 
 class CustomRequestforQuotation(RequestforQuotation):
@@ -38,7 +30,7 @@ class CustomRequestforQuotation(RequestforQuotation):
         self.validate_bundle_items() ###Custom Update
 
     def validate_bundle_items(self):
-        """Check if product bundle item in items table 
+        """Check if product bundle item that is in items table 
         has at least one packed item in packed items table
         if not, remove it"""
         
@@ -88,31 +80,80 @@ class CustomRequestforQuotation(RequestforQuotation):
 
     @frappe.whitelist()
     def make_packing_list(self):
-        from erpnext.stock.doctype.packed_item.packed_item import reset_packing_list
         from copy import deepcopy
-        
         doc = deepcopy(self)
-        reset = reset_packing_list(doc)
-        if reset:
-            packing_list = {}
-            brand_list = {}
-            for item_row in doc.get("items"):
-                if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
-                    for bundle_item in get_product_bundle_items(item_row.item_code):
-                        packing_list[bundle_item.item_code] = packing_list.get(bundle_item.item_code, 0) + (bundle_item.qty * float(item_row.qty)) 
-                        brand_list[bundle_item.item_code] = frappe.db.get_value("Item", bundle_item.item_code, "brand")
-            
-            brand_list = sorted(brand_list.items(), key=lambda x:x[1])
-            for item in brand_list:
-                doc.append("packed_items", {
-                    "item_code": item[0],
-                    "qty": packing_list[item[0]],
-                    "uom": frappe.db.get_value("Item", item[0], "stock_uom"),
-                    "description": frappe.db.get_value("Item", item[0], "description"),
-                    "brand": item[1],
-                    "warehouse": get_item_warehouse(frappe.get_doc("Item", item[0]), args = frappe._dict({"company": self.company}), overwrite_warehouse = True)
-                })
+        packing_list = {}
+        brand_list = {}
+        for item_row in doc.get("items"):
+            if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
+                for bundle_item in get_product_bundle_items(item_row.item_code):
+                    packing_list[bundle_item.item_code] = packing_list.get(bundle_item.item_code, 0) + (bundle_item.qty * float(item_row.qty)) 
+                    brand_list[bundle_item.item_code] = frappe.db.get_value("Item", bundle_item.item_code, "brand")
+        
+        table = []
+        table = _order_by_brand(table, packing_list, brand_list, doc.company)
+        if not self.is_new(): doc.append("packed_items", table)
+        else: doc.update({"packed_items": table})
+
         return doc.get("packed_items")
+
+    @frappe.whitelist()
+    def update_packing_list(self):
+        from copy import deepcopy
+        doc = deepcopy(self)
+        packing_list = {}
+        brand_list = {}
+        for item in doc.get("packed_items"):
+            packing_list[item.item_code] = item.qty
+            brand_list[item.item_code] = frappe.db.get_value("Item", item.item_code, "brand")
+
+        table = []
+        table = _order_by_brand(table, packing_list, brand_list, doc.company)
+        
+        doc.update({"packed_items": table})
+        
+        return doc.get("packed_items")
+
+    @frappe.whitelist()
+    def remove_from_packing_list(self):
+        from copy import deepcopy
+        doc = deepcopy(self)
+        packed_items = deepcopy(doc.packed_items)
+        todelete = []
+        i = 0
+        for packed_item in packed_items:
+            packed_item.qty = 0
+            for item in self.items:
+                if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+                    for bundle_item in get_product_bundle_items(item.item_code):
+                        if bundle_item.item_code == packed_item.item_code:
+                            packed_item.qty += bundle_item.qty * item.qty
+                            break
+            if packed_item.qty == 0:
+                todelete.append(i)
+            i += 1
+        for index in sorted(todelete, reverse=True):
+            del packed_items[index]
+
+        doc.update({"packed_items": packed_items})
+        return doc.get("packed_items")
+
+def _order_by_brand(table, items_list, brand_list = None, company = None):
+    if not brand_list:
+        brand_list = []
+    if brand_list:
+        brand_list = sorted(brand_list.items(), key=lambda x:x[1])
+        for item in brand_list:
+            table.append({
+                "item_code": item[0],
+                "qty": items_list[item[0]],
+                "uom": frappe.db.get_value("Item", item[0], "stock_uom"),
+                "description": frappe.db.get_value("Item", item[0], "description"),
+                "brand": item[1],
+                "warehouse": get_item_warehouse(frappe.get_doc("Item", item[0]), args = frappe._dict({"company": company}), overwrite_warehouse = True) if company else ""
+            })
+    return table
+
 
 @frappe.whitelist()
 def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=None):

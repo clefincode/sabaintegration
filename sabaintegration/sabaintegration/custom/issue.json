@@ -441,7 +441,7 @@
    "set_user_permissions": 0,
    "share": 0,
    "submit": 0,
-   "user_permission_doctypes": "[\"Lead\", \"Customer\"]",
+   "user_permission_doctypes": null,
    "write": 0
   },
   {
@@ -476,7 +476,7 @@
    "set_user_permissions": 0,
    "share": 1,
    "submit": 0,
-   "user_permission_doctypes": "[\"Lead\", \"Customer\"]",
+   "user_permission_doctypes": null,
    "write": 1
   },
   {
@@ -592,14 +592,14 @@
    "_comments": null,
    "_liked_by": null,
    "_user_tags": null,
-   "creation": "2022-10-09 15:55:37.396921",
+   "creation": "2022-12-05 14:43:43.566408",
    "default_value": null,
    "doc_type": "Issue",
    "docstatus": 0,
    "doctype_or_field": "DocType",
    "field_name": null,
    "idx": 0,
-   "modified": "2022-10-09 15:55:37.396921",
+   "modified": "2022-12-05 14:43:43.566408",
    "modified_by": "Administrator",
    "name": "Issue-main-links_order",
    "owner": "Administrator",
@@ -609,7 +609,7 @@
    "property": "links_order",
    "property_type": "Small Text",
    "row_name": null,
-   "value": "[\"1df7778cbe\"]"
+   "value": "[\"8463bdda7e\"]"
   },
   {
    "_assign": null,

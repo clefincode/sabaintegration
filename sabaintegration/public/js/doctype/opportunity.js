@@ -78,6 +78,7 @@ frappe.ui.form.on("Opportunity", {
     },
     refresh(frm) {
         //frm.toggle_display("bundle_items", false);
+        if (!frm.doc.packed_items) frm.toggle_display('packed_items', false);
         if (frm.is_new()) frm.selected_option = 0; 
         else if (frm.doc.with_items) frm.trigger("set_option")
         if (!frm.is_new()){
@@ -245,12 +246,15 @@ frappe.ui.form.on("Opportunity", {
 		})
 	},
     set_option: function(frm){
-        for(let row in frm.doc.items){
+        let found = false;
+        for(let row in cur_frm.doc.items){
             if (frm.doc.items[row]["option_number"]){
-                frm.selected_option = frm.doc.items[row]["option_number"]
+                frm.selected_option = cur_frm.doc.items[row]["option_number"]
+                found = true;
                 break
             }
         }
+        if (found == false) frm.selected_option = 0
         frm.events.set_option_html(frm.selected_option)
     },
     set_option_html: function(option){
@@ -274,14 +278,16 @@ frappe.ui.form.on('Opportunity Item', {
         var child = locals[cdt][cdn];
         child.qty = 1;
         refresh_field("items");
-        validate_product_bundle(frm);
+        update_product_bundle(frm, child, cdt, cdn, "add")
 
     },
     qty(frm, cdt, cdn) {
-        validate_product_bundle(frm);
+        //validate_product_bundle(frm);
+        var d = locals[cdt][cdn]
+        update_product_bundle(frm, d, cdt, cdn, "qty")
     },
     items_remove(frm, cdt, cdn) { 
-        validate_product_bundle(frm);
+        if (cur_frm.doc.packed_items) validate_product_bundle(frm);
     },
     
  
@@ -510,23 +516,27 @@ const validate_product_bundle = async (frm) => {
 };
 
 const update_product_bundle = async (frm, row, cdt, cdn, method) => {
+    console.log(row)
     frappe.dom.freeze()
     if (!frm.doc.items) {
         validate_product_bundle(frm); 
         return;
     }
     if (method == "add"){
-        let child = frm.add_child("items");
+        if (row.doctype == "Opportunity Option"){
+            let child = frm.add_child("items");
 
-        child.item_code = row.item_code;
-        child.qty = row.qty || 1;
-        child.description = row.description || "";
-        child.uom = row.uom;
-        child.option_number = row.option_number;
-        child.item_name = row.item_name || "";
-        child.section_title = row.section_title || "";
-        child.warehouse = row.warehouse || "";
-        await get_item_details(frm, row, cdt, cdn);
+            child.item_code = row.item_code;
+            child.qty = row.qty || 1;
+            child.description = row.description || "";
+            child.uom = row.uom;
+            child.option_number = row.option_number;
+            child.item_name = row.item_name || "";
+            child.section_title = row.section_title || "";
+            child.warehouse = row.warehouse || "";
+            await get_item_details(frm, row, cdt, cdn);
+        }
+        
         await add_packed_items(frm, row);
 
     }
@@ -569,9 +579,9 @@ const add_packed_items = async (frm, parent) => {
             child.description = bundled_item.description;
             child.qty = bundled_item.qty * parent.qty;
             child.uom = bundled_item.uom;
-            await frappe.db.get_value("Item Default", {"parent": bundled_item.item_code}, "default_warehouse",  (r) => {
-                if (r) child.warehouse = r.default_warehouse
-            }, "Item")
+            // await frappe.db.get_value("Item Default", {"parent": bundled_item.item_code}, "default_warehouse",  (r) => {
+            //     if (r) child.warehouse = r.default_warehouse
+            // }, "Item")
         } 
     }
 }

@@ -159,7 +159,7 @@ class CustomQuotation(SellingController):
 
 		opportunity_name = frappe.db.get_all("Quotation Item", {"parent": self.name}, "opportunity")
 		opportunity_option = frappe.db.get_all("Quotation Item", {"parent": self.name}, "opportunity_option_number")
-		if opportunity_name:
+		if opportunity_name[0]['opportunity']:
 			opportunity_name = [sub['opportunity'] for sub in opportunity_name ]
 			opportunity_name = list(set(opportunity_name))
 			if opportunity_option:
@@ -177,9 +177,9 @@ class CustomQuotation(SellingController):
 				found = False
 				notfounditem = option_item.item_code
 				for item in self.items:
-					if (item.opportunity and item.opportunity_option_number and\
-					item.opportunity == opportunity_name and item.opportunity_option_number == opportunity_option) or\
-					(not opportunity_option and item.opportunity and item.opportunity == opportunity_name):
+					# if (item.opportunity and item.opportunity_option_number and\
+					# item.opportunity == opportunity_name and item.opportunity_option_number == opportunity_option) or\
+					# (not opportunity_option and item.opportunity and item.opportunity == opportunity_name):
 						if option_item.item_code == item.item_code and option_item.qty == item.qty:
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
 								found = True
@@ -487,7 +487,6 @@ def make_packing_list(doc):
 
 def check_bundle_items(parent_item, packed_table):
 	from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
-
 	bundle_items = get_product_bundle_items(parent_item.item_code)
 	for bundle_item in bundle_items:
 		found = False
