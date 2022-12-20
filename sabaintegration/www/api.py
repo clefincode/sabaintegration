@@ -3,8 +3,10 @@ import json
 from six import string_types
 from frappe.utils import flt
 from frappe.model.mapper import get_mapped_doc
+from frappe.model.naming import make_autoname
 from erpnext.selling.doctype.sales_order.sales_order import is_product_bundle, set_delivery_date
 
+from sabaintegration.overrides.opportunity import group_similar_items, add_item_to_table
 
 @frappe.whitelist()
 def product_bundle_check_sales_order(item):
@@ -360,3 +362,86 @@ def make_material_request(source_name, target_doc=None):
 	group_similar_items(doc) ###Custom Update
 
 	return doc
+
+@frappe.whitelist()
+def add_items_to_option(process=False):
+	if not process: return
+
+	opportunities = frappe.db.get_all("Opportunity", {
+		"with_items": 1, 
+		"status":("not in", [
+			"Cancelled",
+			"Closed",
+			"Converted",
+			"Quotation",
+			"Project Cancelled",
+			"Quotation (Commercial Proposal )has been sent, Waiting for feedback"
+		]),
+		"condition": ("not in", [
+			"Closed",
+			"Lost"
+		])
+		})
+	added = []
+	notadded = []
+	validate_item_code("Opportunity Item")
+	for opp in opportunities:
+		opportunity = frappe.get_doc("Opportunity", opp)
+		if opportunity.items:
+			
+			option = get_first_empty_option(opportunity)
+			if not option: 
+				notadded.append(opportunity.name) 
+				
+
+			else:
+				selected_option = int(option[-1]) if option[-1] != '0' else 10  
+				for item in opportunity.items:
+					fields = {
+						"option_number": selected_option,
+						"section_title": item.get("section_title") if hasattr(item, "section_title") else ""
+					}
+					add_item_to_table(item, option, opportunity, other_fields=fields)
+				
+				opportunity.update({"selected_option": selected_option})
+				opportunity.save()
+
+				added.append(opportunity.name)
+
+	frappe.db.commit()
+
+	return {"added": added, "not added": notadded}
+
+def get_first_empty_option(opportunity):
+	if not opportunity.option_1: return "option_1"
+	if not opportunity.option_2: return "option_2"
+	if not opportunity.option_3: return "option_3"
+	if not opportunity.option_4: return "option_4"
+	if not opportunity.option_5: return "option_5"
+	if not opportunity.option_6: return "option_6"
+	if not opportunity.option_7: return "option_7"
+	if not opportunity.option_8: return "option_8"
+	if not opportunity.option_9: return "option_9"
+	if not opportunity.option_10: return "option_10"
+
+def validate_item_code(doctype):
+	items = frappe.db.get_all(doctype, {"item_code": "", "item_name": ("!=", "")}, ["name", "item_name"])
+	for item in items:
+		item_code = frappe.db.get_value("Item", {"item_name": item.item_name}, "item_code")
+		if item_code: frappe.db.set_value(doctype, {"item_name": item.item_name, "name": item.name}, "item_code", item_code)
+		else:
+			
+			itemdoc = frappe.new_doc("Item")
+			itemdoc.item_code = item.item_name if not frappe.db.exists("Item", item.item_name) else make_autoname(item.item_name+".###", "", itemdoc)
+			itemdoc.item_name = item.item_name
+			itemdoc.item_group = "All Item Groups"
+			if not frappe.db.exists("Brand", "unknown"): 
+				brand = frappe.new_doc("Brand")
+				brand.brand = "unknown"
+				brand.save()
+			
+			itemdoc.brand = "unknown"
+			itemdoc.save()
+			frappe.db.set_value(doctype, {"item_name": item.item_name, "name": item.name}, "item_code", itemdoc.item_code)
+	#frappe.db.commit()
+

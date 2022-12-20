@@ -39,7 +39,7 @@ class CustomRequestforQuotation(RequestforQuotation):
             items_after_save = [item.item_code for item in self.get("packed_items")]
             reset_table = items_before_save != items_after_save
             if not reset_table: return
-        i = 0
+        i = 1
         itemslist = []
         for item in self.items:
             if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
@@ -50,9 +50,14 @@ class CustomRequestforQuotation(RequestforQuotation):
                             found = True
                             break
                     if found:
+                        item.idx = i
                         itemslist.append(item)
+                        i += 1
                         break
-            else: itemslist.append(item)
+            else: 
+                item.idx = i
+                itemslist.append(item)
+                i += 1
         self.update({"items": itemslist})
 
     def autoname(self):
@@ -215,6 +220,7 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                 sqi.description = item.description
                 sqi.uom = item.uom
                 sqi.request_for_quotation = item.parent
+                sqi.warehouse = item.get("warehouse") or ""
                 newitems.append(sqi)
     doclist.update({
         "items": newitems
@@ -271,6 +277,7 @@ def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None
                 sqi.description = item.description
                 sqi.uom = item.uom
                 sqi.request_for_quotation = item.parent
+                sqi.warehouse = item.get("warehouse") or ""
                 newitems.append(sqi)
                 item_list.append(sqi)
     doclist.update({

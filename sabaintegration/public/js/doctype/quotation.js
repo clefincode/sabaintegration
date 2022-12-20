@@ -34,7 +34,7 @@ frappe.ui.form.on('Quotation', {
 
 	set_label: function(frm) {
 		frm.fields_dict.customer_address.set_label(__(frm.doc.quotation_to + " Address"));
-	}
+	},
 });
 
 erpnext.selling.QuotationController = erpnext.selling.SellingController.extend({

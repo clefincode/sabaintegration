@@ -1,0 +1,45 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2022-12-13 12:32:22.722809",
+ "disable_prepared_report": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": "SABA Default",
+ "modified": "2022-12-13 12:32:22.722809",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Items with Zero Quantities",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Opportunity",
+ "report_name": "Items with Zero Quantities",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "0 CRM - Opportunity Viewing (If Owner)"
+  },
+  {
+   "role": "0 CRM - Opportunity Admin"
+  },
+  {
+   "role": "0 CRM - Opportunity Creation (If Owner)"
+  },
+  {
+   "role": "Sales User"
+  },
+  {
+   "role": "Sales Manager"
+  },
+  {
+   "role": "0 CRM - Opportunity Reports"
+  },
+  {
+   "role": "0 CRM - Opportunity creation (Can View All)"
+  }
+ ]
+}

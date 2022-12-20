@@ -1,4 +1,5 @@
 import json
+from six import string_types
 
 import frappe
 from frappe import _
@@ -7,7 +8,7 @@ from frappe.utils import cint
 
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 from erpnext.crm.doctype.opportunity.opportunity import Opportunity
-from frappe.utils import nowdate
+
 
 from sabaintegration.stock.get_item_details import get_item_warehouse
 
@@ -20,7 +21,6 @@ class CustomOpportunity(Opportunity):
         group_items= {}
         brand_list = {}
         #parent_items= {}
-        count = 0
         bundles = []
         for item in self.parent_items:
             if not item.qty : item.qty = 0
@@ -38,21 +38,80 @@ class CustomOpportunity(Opportunity):
                 "brand": item[1],
                 "warehouse": get_item_warehouse(frappe.get_doc("Item", item[0]), args = frappe._dict({"company": self.company}), overwrite_warehouse = True)
             })
-        # duplicate_list = []
-        # for item in bundles:
-        #     key = item.item_code
-        #     if key in group_items:
-        #         count += 1
-        #         item.qty = group_items[key]                
-        #         item.idx = count
-        #         del group_items[key]
-        #     else:
-        #         duplicate_list.append(item)
-                
-        # for item in duplicate_list:
-        #     bundles.remove(item)
-        #print(f"\033[92m {bundles}")
         return bundles
+
+    def before_save(self):
+        self.update_items_table()
+
+    def update_items_table(self):
+        if (self.selected_option):
+            opt_before_save = opt_after_save = None
+            if self.selected_option == 1:
+                opt_before_save = self.get_doc_before_save().option_1 if self.get_doc_before_save() else []
+                opt_after_save = self.option_1
+            elif self.selected_option == 2:
+                opt_before_save = self.get_doc_before_save().option_2 if self.get_doc_before_save() else []
+                opt_after_save = self.option_2
+            elif self.selected_option == 3:
+                opt_before_save = self.get_doc_before_save().option_3 if self.get_doc_before_save() else []
+                opt_after_save = self.option_3
+            elif self.selected_option == 4:
+                opt_before_save = self.get_doc_before_save().option_4 if self.get_doc_before_save() else []
+                opt_after_save = self.option_4
+            elif self.selected_option == 5:
+                opt_before_save = self.get_doc_before_save().option_5 if self.get_doc_before_save() else []
+                opt_after_save = self.option_5
+            elif self.selected_option == 6:
+                opt_before_save = self.get_doc_before_save().option_6 if self.get_doc_before_save() else []
+                opt_after_save = self.option_6
+            elif self.selected_option == 7:
+                opt_before_save = self.get_doc_before_save().option_7 if self.get_doc_before_save() else []
+                opt_after_save = self.option_7
+            elif self.selected_option == 8:
+                opt_before_save = self.get_doc_before_save().option_8 if self.get_doc_before_save() else []
+                opt_after_save = self.option_8
+            elif self.selected_option == 9:
+                opt_before_save = self.get_doc_before_save().option_9 if self.get_doc_before_save() else []
+                opt_after_save = self.option_9
+            elif self.selected_option == 10:
+                opt_before_save = self.get_doc_before_save().option_10 if self.get_doc_before_save() else []
+                opt_after_save = self.option_10
+
+            if opt_after_save and opt_before_save:
+                items_before_save = [{"item_code": item.item_code, "qty": item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_before_save]
+                items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_after_save]
+
+                if items_before_save != items_after_save:
+                    self.update({"items": group_similar_items(items_after_save, self.company)})
+                    if self.items: self.update_packed_table()
+
+            elif opt_before_save and not opt_after_save:
+                self.items = []
+                self.parent_items = []
+
+            elif not opt_before_save and opt_after_save:
+                items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_after_save]
+                self.update({"items": group_similar_items(items_after_save, self.company)})
+                if self.items: self.update_packed_table()
+
+        elif self.items:
+            items_before_save = [{"item_code": item.item_code, "qty": item.qty, "warehouse": item.warehouse} for item in self.items]
+            items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse} for item in self.items]
+            if items_before_save != items_after_save:
+                self.update({"items": group_similar_items(items_after_save, self.company)})
+                if self.items: self.update_packed_table()
+
+    def update_packed_table(self):
+        packing_items = []
+        for item in self.items:
+            if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
+                for bundle in get_product_bundle_items(item.item_code):
+                    bundle.qty = bundle.qty * item.qty
+                    fields = {
+                        "parent_item": item.item_code
+                    }
+                    add_item_to_table(bundle, packing_items, other_fields=fields)
+        self.update({"parent_items": packing_items})
 
     def validate(self):
         self._prev = frappe._dict(
@@ -194,39 +253,41 @@ def make_request_for_quotation(source_name, target_doc=None):
             }
         )
         req_packed_items = frappe.db.sql("""
-        select packed_item.item_code, packed_item.qty, rfg.name as parent
+        select distinct packed_item.item_code, packed_item.qty, rfg.name as parent
         from `tabRequest for Quotation Item` as item
         inner join `tabRequest for Quotation` as rfg on rfg.name = item.parent
         inner join `tabRequest for Quotation Packed Item` as packed_item on packed_item.parent = rfg.name 
         where item.opportunity = '{0}' and item.opportunity_option_number = {1} and item.docstatus != 2
-        group by packed_item.item_code, packed_item.qty
+        
         """.format(source_name, op_num), as_dict = 1)
-
         opportunity = frappe.get_doc("Opportunity", source_name)
         bundles = opportunity.group_similar_bundle_items()
         for bundle in bundles:
             found = False
             existsitems = []
+            qtys = {}
             for packed_item in req_packed_items:
                 if packed_item.item_code == bundle.get("item_code") and packed_item.qty == bundle.get("qty"):
                     found = True
                     break
                 elif packed_item.item_code == bundle.get("item_code") and packed_item.qty < bundle.get("qty"):
-                    bundle["qty"] -= packed_item.qty
+                    bundle["qty"] -= packed_item.qty                    
                     if bundle.get("qty") == 0:
                         found = True
                         break
-                    items = frappe.db.get_all("Request for Quotation Item", {"parent" : packed_item.parent}, ["item_code"])
+                    items = frappe.db.get_all("Request for Quotation Item", {"parent" : packed_item.parent}, ["item_code", "qty"])
                     for item in items:
+                        opp_item_qty = frappe.db.get_value("Opportunity Item", {"parent": source_name, "item_code": item.item_code}, "qty")
                         if frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
-                            for bundle_item in get_product_bundle_items(item.item_code):
-                                if bundle_item.item_code == packed_item.item_code:
-                                    existsitems.append(item.item_code)
-                                    break
-                    
+                            if item.qty == opp_item_qty:
+                                for bundle_item in get_product_bundle_items(item.item_code):
+                                    if bundle_item.item_code == packed_item.item_code:
+                                        existsitems.append(item.item_code)
+                                        break
+                            elif item.qty < opp_item_qty:
+                                qtys[item.item_code] = opp_item_qty - item.qty
                     
             #print(f"\033[93m {bundle.get('item_code')}")
-            
             if not found:
                 add_item_to_table(bundle, "packed_items", doclist)
 
@@ -248,18 +309,21 @@ def make_request_for_quotation(source_name, target_doc=None):
                             "opportunity": item.parent,
                             "opportunity_option_number": item.option_number
                         }
+                        item.qty = qtys.get(item.item_code) if qtys.get(item.item_code) else item.qty
                         add_item_to_table(item, "items", doclist, fields)
 
         items = frappe.db.sql("""
         select item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
-        item.description, item.brand, item.image, item.parent, item.option_number
+        item.description, item.brand, item.image, item.parent, item.option_number, rfqi.qty as r_qty
         from `tabItem`
         inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
         left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
-        where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and rfqi.item_code is null 
+        where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and 
+        (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty))
         """.format(source_name), as_dict = 1)
 
         for item in items:
+            if item.get("r_qty"): item.qty -= item.r_qty
             fields = {
                 "stock_uom": item.uom or item.get("stock_uom") or frappe.db.get_value("Item", item.get("item_code"), "stock_uom"),
                 "conversion_factor": 1.00,
@@ -292,3 +356,32 @@ def add_item_to_table(item, table = None, doc = None, other_fields = None):
     if doc and table: doc.append(table, fields) # If doctype has table
     elif doc and not table: doc.append(fields) # If doctype is child table
     else: table.append(fields) # if it's not a doctype (just a list)
+
+@frappe.whitelist()
+def group_similar_items(items, company= None):
+    """group items with the same item code in one row
+    with the sum of the quatities"""
+    if isinstance(items, string_types):
+        items = json.loads(items)
+
+    group_items = {}
+    groupeditems = []
+    if len(items) == 1 and not items[0].get("item_code") and not items[0].get("item_name"): return
+    for item in items:
+        if not item.get("qty") : item["qty"] = 0
+        else :group_items[item.get("item_code")] = group_items.get(item.get("item_code"), 0) + item.get("qty")
+ 
+    for item in group_items:
+        groupeditems.append({
+            "item_code": item,
+            "qty": group_items[item],
+            "item_name":frappe.db.get_value("Item", item, "item_name"),
+            "uom": frappe.db.get_value("Item", item, "stock_uom"),
+            "description": frappe.db.get_value("Item", item, "description"),
+            "brand": frappe.db.get_value("Item", item, "brand"),
+            "warehouse": get_item_warehouse(frappe.get_doc("Item", item), args = frappe._dict({"company": company}), overwrite_warehouse = True) if company else "",
+            "image": frappe.db.get_value("Item", item, "image"),
+            "option_number": items[0].get("option_number")
+        })
+        
+    return groupeditems

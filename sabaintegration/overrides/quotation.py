@@ -1,7 +1,7 @@
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
-
+import copy
 import frappe
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
@@ -33,6 +33,7 @@ class CustomQuotation(SellingController):
 
 		self.add_item_name_in_packed()
 		make_packing_list(self) 
+		self.validate_rates()
 
 	def validate_valid_till(self):
 		if self.valid_till and getdate(self.valid_till) < getdate(self.transaction_date):
@@ -105,6 +106,14 @@ class CustomQuotation(SellingController):
 				for i in range(len(self.get("packed_items"))):
 					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code:
 						self.packed_items[i].parent_detail_docname = item_row.name
+	
+	def validate_rates(self):
+		if self.has_value_changed("conversion_rate"):
+			for item in self.get("items"):
+				item.rate_without_profit_margin = item.rate_without_profit_margin / self.get("conversion_rate")
+				item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
+			for item in self.get("packed_items"):
+				item.rate = item.rate / self.get("conversion_rate")
 	###End Custom Update
 
 	def update_opportunity(self, status):
@@ -169,32 +178,39 @@ class CustomQuotation(SellingController):
 			self.check_option_items_in_items_table(opportunity_name[0], opportunity_option[0])
 
 	def check_option_items_in_items_table(self, opportunity_name, opportunity_option):
+			# if quotation is from option in the opportunity, then get all items of the opportunity
+			# if not, get all items from items table in the opportunity
 			if opportunity_option:
-				option_items = frappe.db.get_all("Opportunity Option", {"parent": opportunity_name, "parentfield": "option_"+str(opportunity_option)}, ["item_code", "qty"])
+				option_items = frappe.db.get_all("Opportunity Option", {"parent": opportunity_name, "parentfield": "option_"+str(opportunity_option)}, ["item_code", "qty", "section_title"])
 			else: option_items = frappe.db.get_all("Opportunity Item", {"parent": opportunity_name}, ["item_code", "qty"])
 			
+			itemslist = copy.deepcopy(self.items)
+			# iterate through items in the option to check if it has been added to quotation
 			for option_item in option_items:
 				found = False
+				i = 0
 				notfounditem = option_item.item_code
-				for item in self.items:
-					# if (item.opportunity and item.opportunity_option_number and\
-					# item.opportunity == opportunity_name and item.opportunity_option_number == opportunity_option) or\
-					# (not opportunity_option and item.opportunity and item.opportunity == opportunity_name):
-						if option_item.item_code == item.item_code and option_item.qty == item.qty:
+				for item in itemslist:
+						# if item is present with the same quantity and dection title, then check its bundles
+						if option_item.item_code == item.item_code and option_item.qty == item.qty and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
 								found = True
+								del itemslist[i]
 							else:
 								found = check_bundle_items(item, self.packed_items)
+								if found: del itemslist[i]
 							break
 					
-						elif option_item.item_code == item.item_code and option_item.qty > item.qty:
-							found = False
-							break
+						# elif option_item.item_code == item.item_code and option_item.qty > item.qty and option_item.section_title == item.section_title:
+						# 	found = False
+						# 	break
+						i += 1
 				if not found:
 					frappe.throw("""You can't submit this document now until you add
 					all items of <b>{0}</b> of the opportunity <b>{1}</b>.<br>
-					Item <b>{2}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", opportunity_name, notfounditem))
-
+					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
+					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
+	
 	# ###End Custom Update
 
 	def on_submit(self):
@@ -491,11 +507,11 @@ def check_bundle_items(parent_item, packed_table):
 	for bundle_item in bundle_items:
 		found = False
 		for packed_item in packed_table:
-			if packed_item.item_code == bundle_item.item_code and parent_item.item_code == packed_item.parent_item:
+			if packed_item.item_code == bundle_item.item_code and parent_item.item_code == packed_item.parent_item and parent_item.section_title == packed_item.section_title:
 				if packed_item.qty >= bundle_item.qty * parent_item.qty:
 					found = True
 					break
-				else: return False
+				#else: return False
 		if not found:
 			return False
 	return True
@@ -527,10 +543,13 @@ def reset_packing_list(doc, from_option):
 		doc.set("packed_items", [])
 	elif reset_table and from_option:
 		packeditems = []
+		i = 1
 		for item in doc.get("packed_items"):
 			for p_item in doc.get("items"):
 				if item.parent_item == p_item.item_code:
+					item.idx = i
 					packeditems.append(item)
+					i += 1
 					break
 
 		doc.set("packed_items", packeditems)
