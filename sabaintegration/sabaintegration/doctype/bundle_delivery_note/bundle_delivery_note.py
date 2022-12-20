@@ -58,7 +58,8 @@ class BundleDeliveryNote(Document):
 				self.validation_messages.append(_get_msg(row_num, _("Duplicate entry")))
 			else:
 				items.append(key)
-			bundle_items = frappe.db.get_all('Product Bundle Item', {'parent': self.item_parent, 'parenttype': 'Product Bundle'}, ['item_code'])
+			product_bundle = frappe.db.get_value("Product Bundle", {"new_item_code": self.item_parent}, "name")
+			bundle_items = frappe.db.get_all('Product Bundle Item', {'parent': product_bundle, 'parenttype': 'Product Bundle'}, ['item_code'])
 			
 			check_key = [key for item in bundle_items if item.item_code == key[0]]
 			if not check_key:
