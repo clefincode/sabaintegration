@@ -110,14 +110,6 @@ class BundleDeliveryNote(Document):
 				_("Serial no(s) required for serialized item {0}").format(item_code))
 		
 	def create_stock_entry(self):
-		for item in self.stock_entries:
-			self._create_stock_entry(item)
-
-	def _create_stock_entry(self, item):
-		qty = item.qty
-		if not item.batch_no: batch_no = '' 
-		else: batch_no = item.batch_no		
-
 		stock_entry = frappe.new_doc("Stock Entry")
 		stock_entry.company = frappe.db.get_value("Sales Order", self.sales_order, 'company')
 		stock_entry.posting_date = getdate()
@@ -126,16 +118,19 @@ class BundleDeliveryNote(Document):
 		stock_entry.set_stock_entry_type()
 		stock_entry.from_bundle_delivery_note = self.name
 
-		stock_entry.append('items', {
-			'item_code': item.item_code,
-			'batch_no': item.batch_no,
-			'serial_no': (item.serial_no) if item.serial_no else "",
-			'qty': qty,
-			'uom': item.uom,
-			'basic_rate': item.rate,
-			's_warehouse': item.warehouse,
-			'conversion_factor': 1.0
-		})
+		for item in self.stock_entries:
+			qty = item.qty
+			stock_entry.append('items', {
+				'item_code': item.item_code,
+				'batch_no': item.batch_no,
+				'serial_no': (item.serial_no) if item.serial_no else "",
+				'qty': qty,
+				'uom': item.uom,
+				'basic_rate': item.rate,
+				's_warehouse': item.warehouse,
+				'conversion_factor': 1.0
+			})
+			
 		stock_entry.save()
 		stock_entry.submit()	
 
