@@ -10,6 +10,7 @@ from frappe.model.mapper import get_mapped_doc
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import SupplierQuotation
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 from erpnext.accounts.party import get_party_account_currency
+from erpnext.setup.utils import get_exchange_rate
 
 from sabaintegration.overrides.opportunity import add_item_to_table
 class CustomSupplierQuotation(SupplierQuotation):
@@ -24,6 +25,8 @@ def make_quotation(source_name, target_doc=None):
         target.opportunity = opportunity
 
         target.currency = get_party_account_currency(target.quotation_to, target.party_name, target.company)
+
+        target.conversion_rate = get_exchange_rate(target.currency, "USD")
     # If there is no request for quotation linked to this supplier quotation,
     # then map supplier quotation fields and items to quotation
     request_for_quotation = frappe.db.get_value("Supplier Quotation Item", {"parent" : source_name}, "request_for_quotation")
@@ -34,9 +37,9 @@ def make_quotation(source_name, target_doc=None):
         {
             "Supplier Quotation": {
                 "doctype": "Quotation",
-                "field_map": {
-                    "name": "supplier_quotation",
-                },
+                # "field_map": {
+                #     "name": "supplier_quotation",
+                # },
             },
             "Supplier Quotation Item": {
 				"doctype": "Quotation Item",
@@ -91,11 +94,9 @@ def make_quotation(source_name, target_doc=None):
         packed_items = [[item.item_code, item.parent_item, item.section_title] for item in doclist.get("packed_items")] or []
         
         # for conversion rate pupose
-        if quotation and doclist.conversion_rate: 
-            conversion_rate = doclist.conversion_rate
-        else:
-            conversion_rate = 1.00
-        
+
+        conversion_rate = get_exchange_rate(doclist.currency, "USD")
+
         # iterate through items in request for quotation items
         for opp_row in opportunity_option_items:
             for row in rfq_doc.items:
@@ -139,7 +140,7 @@ def make_quotation(source_name, target_doc=None):
                             fields = {
                                 "rate": total_rate_with_margin,
                                 "rate_without_profit_margin": total_rate,
-                                "price_list_rate": total_rate_with_margin,
+                                #"price_list_rate": total_rate_with_margin,
                                 "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100,
                                 "opportunity_option_number": row.opportunity_option_number,
                                 "opportunity": row.opportunity,
@@ -153,7 +154,7 @@ def make_quotation(source_name, target_doc=None):
                                 if item.item_code == row.item_code:
                                     item.rate += total_rate_with_margin
                                     item.rate_without_profit_margin += total_rate
-                                    item.price_list_rate += total_rate_with_margin
+                                    #item.price_list_rate += total_rate_with_margin
                                     if item.rate_without_profit_margin: 
                                         item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
                     
@@ -167,7 +168,7 @@ def make_quotation(source_name, target_doc=None):
                         rate_without_profit_margin = rate / conversion_rate
                         fields = {
                             "rate": rate_with_profit_margin,
-                            "price_list_rate": rate_with_profit_margin,
+                            #"price_list_rate": rate_with_profit_margin,
                             "rate_without_profit_margin": rate_without_profit_margin,
                             "margin_from_supplier_quotation": profit_margin,
                             "opportunity_option_number": row.opportunity_option_number,
@@ -178,9 +179,9 @@ def make_quotation(source_name, target_doc=None):
                     break
         add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
         
-        if quotation: 
-            frappe.msgprint("Items are added")
-            doclist.save()
+        #if quotation: 
+        doclist.save()
+        frappe.msgprint("Items are added")
 
         return doclist
 

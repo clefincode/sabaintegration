@@ -16,15 +16,7 @@ frappe.ui.form.on("Request for Quotation",{
 		//frm.set_df_property('packed_items', 'cannot_delete_rows', true);
 		if (!frm.doc.packed_items) frm.toggle_display('packed_items', false);
 	},
-	refresh: function(frm, cdt, cdn) {
-		console.log("jfesadjf")
-		// if (frm.doc.docstatus === 1) {
 
-		// 	frm.add_custom_button(__('Custom Supplier Quotation'),
-		// 		function(){ console.log("HHHH"); frm.trigger("make_supplier_quotation") }, __("Create"));
-		// }
-
-	},
     make_supplier_quotation: function(frm) {
 		var doc = frm.doc;
 		var dialog = new frappe.ui.Dialog({

@@ -773,11 +773,9 @@ def get_price_list_rate(args, item_doc, out=None):
 
 		if meta.get_field("currency"):
 			validate_conversion_rate(args, meta)
-		###Custom Update
-		if not args.price_list_rate:
-			price_list_rate = get_price_list_rate_for(args, item_doc.name)
-		else: price_list_rate = args.price_list_rate
-		###End Custom Update
+
+		price_list_rate = get_price_list_rate_for(args, item_doc.name)
+
 		# variant
 		if price_list_rate is None and item_doc.variant_of:
 			price_list_rate = get_price_list_rate_for(args, item_doc.variant_of)
