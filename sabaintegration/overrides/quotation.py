@@ -21,6 +21,8 @@ class CustomQuotation(Quotation):
 		self.add_item_name_in_packed()
 		make_packing_list(self) 
 		##self.validate_rates()
+		self.update_total_margin()
+		self.set_option_number()
 
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
@@ -36,9 +38,19 @@ class CustomQuotation(Quotation):
 	# 			item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
 	# 		for item in self.get("packed_items"):
 	# 			item.rate = item.rate / self.get("conversion_rate")
+	
+	def update_total_margin(self):
+		self.total_margin = 0
+		for item in self.items:
+			self.total_margin += item.margin_from_supplier_quotation
 
+	def set_option_number(self):
+		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
+		if opportunity_option:
+			self.option_number_from_opportunity =opportunity_option
+			
 	def before_submit(self):
-		self.check_opportunity()
+		if self.supplier_quotations: self.check_opportunity()
 
 	def check_opportunity(self):
 		"""Check if the quotations comes from an opportunity
@@ -46,7 +58,7 @@ class CustomQuotation(Quotation):
 
 		opportunity_name = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity")
 		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
-		if opportunity_name:
+		if opportunity_name and opportunity_option > 0:
 			# opportunity_name = [sub['opportunity'] for sub in opportunity_name ]
 			# opportunity_name = list(set(opportunity_name))
 			# if opportunity_option:

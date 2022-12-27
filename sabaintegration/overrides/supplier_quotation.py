@@ -20,6 +20,8 @@ class CustomSupplierQuotation(SupplierQuotation):
 @frappe.whitelist()
 def make_quotation(source_name, target_doc=None):
     def set_missing_values(source, target):
+        from erpnext.controllers.accounts_controller import get_default_taxes_and_charges
+
         target.quotation_to = frappe.db.get_value("Opportunity", opportunity, "opportunity_from")
         target.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
         target.opportunity = opportunity
@@ -27,6 +29,11 @@ def make_quotation(source_name, target_doc=None):
         target.currency = get_party_account_currency(target.quotation_to, target.party_name, target.company)
 
         target.conversion_rate = get_exchange_rate(target.currency, "USD")
+        taxes = get_default_taxes_and_charges(
+            "Sales Taxes and Charges Template", company=target.company
+        )
+        if taxes.get("taxes"):
+            target.update(taxes)
     # If there is no request for quotation linked to this supplier quotation,
     # then map supplier quotation fields and items to quotation
     request_for_quotation = frappe.db.get_value("Supplier Quotation Item", {"parent" : source_name}, "request_for_quotation")
@@ -42,13 +49,10 @@ def make_quotation(source_name, target_doc=None):
                 # },
             },
             "Supplier Quotation Item": {
-				"doctype": "Quotation Item",
-				"condition": lambda doc: frappe.db.get_value("Item", doc.item_code, "is_sales_item") == 1,
-				"add_if_empty": True,
-			},
-            "Purchase Taxes and Charges": {
-                "doctype": "Purchase Taxes and Charges",
-            }
+                "doctype": "Quotation Item",
+                "condition": lambda doc: frappe.db.get_value("Item", doc.item_code, "is_sales_item") == 1,
+                "add_if_empty": True,
+            },
         },
         target_doc,
         )
@@ -77,9 +81,6 @@ def make_quotation(source_name, target_doc=None):
                     "Supplier Quotation": {
                         "doctype": "Quotation",
                     },
-                    "Purchase Taxes and Charges": {
-                        "doctype": "Sales Taxes and Charges",
-                    }
                 },
                 target_doc,
                 set_missing_values,
@@ -92,7 +93,7 @@ def make_quotation(source_name, target_doc=None):
             }, ["*"])
         quotation_items = [[item.item_code, item.section_title] for item in doclist.get("items")] or []
         packed_items = [[item.item_code, item.parent_item, item.section_title] for item in doclist.get("packed_items")] or []
-        
+        packed_rfg = [item.item_code for item in rfq_doc.packed_items]
         # for conversion rate pupose
 
         conversion_rate = get_exchange_rate(doclist.currency, "USD")
@@ -113,8 +114,9 @@ def make_quotation(source_name, target_doc=None):
                         for product_bundle_item in get_product_bundle_items(row.item_code):
                             for item in sq_items:
                                 if item.item_code == product_bundle_item.item_code and\
-                                    (not [row.item_code, opp_row.section_title] in quotation_items or\
-                                    not [item.item_code, row.item_code, opp_row.section_title] in packed_items):
+                                item.item_code in packed_rfg and\
+                                (not [row.item_code, opp_row.section_title] in quotation_items or\
+                                not [item.item_code, row.item_code, opp_row.section_title] in packed_items):
                                     found = True
                                     packed_item = deepcopy(item)
                                     packed_item.qty = product_bundle_item.qty * opp_row.qty
@@ -135,7 +137,6 @@ def make_quotation(source_name, target_doc=None):
                         # if there is at least one packed item that has added 
                         # and the product bundle is not in the quotation items, then add the item
                         # margin_from_supplier_quotation is the overall margine for this item
-                        
                         if found and not [row.item_code, opp_row.section_title] in quotation_items:
                             fields = {
                                 "rate": total_rate_with_margin,
@@ -151,7 +152,7 @@ def make_quotation(source_name, target_doc=None):
                         # if it's already in the items table then update the rates only
                         elif found and [row.item_code, opp_row.section_title] in quotation_items:
                             for item in doclist.get("items"):
-                                if item.item_code == row.item_code:
+                                if item.item_code == row.item_code and opp_row.section_title == row.section_title:
                                     item.rate += total_rate_with_margin
                                     item.rate_without_profit_margin += total_rate
                                     #item.price_list_rate += total_rate_with_margin

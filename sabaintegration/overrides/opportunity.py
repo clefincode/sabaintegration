@@ -234,7 +234,7 @@ def make_request_for_quotation(source_name, target_doc=None):
                     },
                 "Opportunity Item":{
                     "doctype": "Request for Quotation Item",
-                    "field_map": [ ["parent", "opportunity"], ["uom", "uom"], ["option_number", "opportunity_option_number"]],
+                    "field_map": [ ["parent", "opportunity"], ["name", "opportunity_item"], ["uom", "uom"], ["option_number", "opportunity_option_number"]],
                     "postprocess": update_item,
                 }
             },
@@ -307,14 +307,16 @@ def make_request_for_quotation(source_name, target_doc=None):
                             "conversion_factor": 1.00,
                             "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
                             "opportunity": item.parent,
-                            "opportunity_option_number": item.option_number
+                            "opportunity_option_number": item.option_number,
+                            "opportunity_item": item.name
                         }
                         item.qty = qtys.get(item.item_code) if qtys.get(item.item_code) else item.qty
                         add_item_to_table(item, "items", doclist, fields)
 
         items = frappe.db.sql("""
-        select item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
-        item.description, item.brand, item.image, item.parent, item.option_number, rfqi.qty as r_qty
+        select distinct item.name, item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
+        item.description, item.brand, item.image, item.parent, item.option_number
+        #, rfqi.qty as r_qty
         from `tabItem`
         inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
         left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
@@ -323,13 +325,24 @@ def make_request_for_quotation(source_name, target_doc=None):
         """.format(source_name), as_dict = 1)
 
         for item in items:
-            if item.get("r_qty"): item.qty -= item.r_qty
+            qtys = frappe.db.get_all("Request for Quotation Item", {
+                "opportunity": source_name, 
+                "opportunity_option_number": item.option_number,
+                "item_code": item.item_code
+                }, "qty")
+            total_qty = 0
+            for row in qtys:
+                total_qty += row.qty
+            item.qty = item.qty - total_qty
+            if item.qty == 0: continue
+            #if item.get("r_qty"): item.qty -= item.r_qty
             fields = {
                 "stock_uom": item.uom or item.get("stock_uom") or frappe.db.get_value("Item", item.get("item_code"), "stock_uom"),
                 "conversion_factor": 1.00,
                 "image": item.image or frappe.db.get_value("Item", item.item_code, "image"),
                 "opportunity": item.parent,
-                "opportunity_option_number": item.option_number
+                "opportunity_option_number": item.option_number,
+                "opportunity_item": item.name
             }
             add_item_to_table(item, "items", doclist, fields)
         
@@ -369,19 +382,23 @@ def group_similar_items(items, company= None):
     if len(items) == 1 and not items[0].get("item_code") and not items[0].get("item_name"): return
     for item in items:
         if not item.get("qty") : item["qty"] = 0
-        else :group_items[item.get("item_code")] = group_items.get(item.get("item_code"), 0) + item.get("qty")
- 
+        else :
+            qty = 0
+            if group_items.get(item.get('item_code')):
+                qty = group_items.get(item.get("item_code"))[0]
+            group_items[item.get("item_code")] = [qty + item.get("qty"), item.get("technical_comment")]
     for item in group_items:
         groupeditems.append({
             "item_code": item,
-            "qty": group_items[item],
+            "qty": group_items[item][0],
             "item_name":frappe.db.get_value("Item", item, "item_name"),
             "uom": frappe.db.get_value("Item", item, "stock_uom"),
             "description": frappe.db.get_value("Item", item, "description"),
             "brand": frappe.db.get_value("Item", item, "brand"),
             "warehouse": get_item_warehouse(frappe.get_doc("Item", item), args = frappe._dict({"company": company}), overwrite_warehouse = True) if company else "",
             "image": frappe.db.get_value("Item", item, "image"),
-            "option_number": items[0].get("option_number")
+            "option_number": items[0].get("option_number"),
+            "technical_comment": group_items[item][1]
         })
         
     return groupeditems

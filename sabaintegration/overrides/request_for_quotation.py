@@ -18,16 +18,8 @@ from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_ite
 
 class CustomRequestforQuotation(RequestforQuotation):
     def validate(self):
-        self.validate_duplicate_supplier()
-        self.validate_supplier_list()
-        validate_for_items(self)
-        super(CustomRequestforQuotation, self).set_qty_as_per_stock_uom()
-        self.update_email_id()
-
-        if self.docstatus < 1:
-            # after amend and save, status still shows as cancelled, until submit
-            frappe.db.set(self, "status", "Draft")
-        self.validate_bundle_items() ###Custom Update
+        super(CustomRequestforQuotation, self).validate()
+        self.validate_bundle_items()
 
     def validate_bundle_items(self):
         """Check if product bundle item that is in items table 
@@ -211,6 +203,7 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                     doclist.items[i].qty += item.qty
                     newitems = doclist.items
                     break
+                i += 1
                     
             if not found:
                 sqi = frappe.new_doc("Supplier Quotation Item")

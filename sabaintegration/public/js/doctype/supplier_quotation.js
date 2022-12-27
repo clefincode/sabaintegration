@@ -2,14 +2,6 @@
 {% include 'erpnext/public/js/controllers/buying.js' %};
 
 erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.extend({
-    setup: function() {
-        this.frm.custom_make_buttons = {
-            'Purchase Order': 'Purchase Order',
-            'Quotation': 'Quotation'
-        }
-
-        this._super();
-    },
 
     refresh: function() {
         var me = this;
@@ -76,12 +68,6 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
         }
     },
 
-    make_purchase_order: function() {
-        frappe.model.open_mapped_doc({
-            method: "erpnext.buying.doctype.supplier_quotation.supplier_quotation.make_purchase_order",
-            frm: cur_frm
-        })
-    },
     make_quotation: function() {
         frappe.model.open_mapped_doc({
             method: "sabaintegration.overrides.supplier_quotation.make_quotation",

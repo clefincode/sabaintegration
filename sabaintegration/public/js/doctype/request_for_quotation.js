@@ -3,7 +3,7 @@
 frappe.ui.form.on("Request for Quotation",{
 	setup: function(frm) {
 		frm.custom_make_buttons = {
-			'Supplier Quotation': 'Create'
+			'Supplier Quotation From Opportunity': 'Create'
 		}
 		frm.fields_dict["suppliers"].grid.get_field("contact").get_query = function(doc, cdt, cdn) {
 			let d = locals[cdt][cdn];
@@ -14,13 +14,40 @@ frappe.ui.form.on("Request for Quotation",{
 		}
 		frm.set_df_property('packed_items', 'cannot_add_rows', true);
 		//frm.set_df_property('packed_items', 'cannot_delete_rows', true);
-		if (!frm.doc.packed_items) frm.toggle_display('packed_items', false);
+		if (!frm.doc.packed_items || frm.doc.packed_items.length < 1) frm.toggle_display('packed_items', false);
+	},
+	refresh: function(frm, cdt, cdn) {
+		if (frm.doc.docstatus === 1 && frm.doc.opportunity) {
+
+			frm.add_custom_button(__('Supplier Quotation From Opportunity'),
+				function(){ frm.trigger("make_supplier_quotation_opp") }, __("Create"));
+
+			frm.page.set_inner_btn_group_as_primary(__('Create'));
+		}
+
 	},
 
-    make_supplier_quotation: function(frm) {
+    make_supplier_quotation_opp: function(frm) {
 		var doc = frm.doc;
+		if (doc.suppliers.length == 1){
+			return frappe.call({
+				type: "GET",
+				method: "sabaintegration.overrides.request_for_quotation.make_supplier_quotation_from_rfq",
+				args: {
+					"source_name": doc.name,
+					"for_supplier": doc.suppliers[0].supplier
+				},
+				freeze: true,
+				callback: function(r) {
+					if(!r.exc) {
+						var doc = frappe.model.sync(r.message);
+						frappe.set_route("Form", r.message.doctype, r.message.name);
+					}
+				}
+			});
+		}
 		var dialog = new frappe.ui.Dialog({
-			title: __("Create Supplier Quotation"),
+			title: __("Create Supplier Quotation From Opportunity"),
 			fields: [
 				{	"fieldtype": "Link",
 					"label": __("Supplier"),

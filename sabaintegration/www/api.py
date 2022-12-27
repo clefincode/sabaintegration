@@ -364,24 +364,12 @@ def make_material_request(source_name, target_doc=None):
 	return doc
 
 @frappe.whitelist()
-def add_items_to_option(process=False):
+def add_items_to_option(opplist, process=False):
 	if not process: return
+	if isinstance(opplist, string_types):
+		opplist = json.loads(opplist)
 
-	opportunities = frappe.db.get_all("Opportunity", {
-		"with_items": 1, 
-		"status":("not in", [
-			"Cancelled",
-			"Closed",
-			"Converted",
-			"Quotation",
-			"Project Cancelled",
-			"Quotation (Commercial Proposal )has been sent, Waiting for feedback"
-		]),
-		"condition": ("not in", [
-			"Closed",
-			"Lost"
-		])
-		})
+	opportunities = frappe.db.get_all("Opportunity", {"name": ("in", opplist)})
 	added = []
 	notadded = []
 	validate_item_code("Opportunity Item")
@@ -399,7 +387,8 @@ def add_items_to_option(process=False):
 				for item in opportunity.items:
 					fields = {
 						"option_number": selected_option,
-						"section_title": item.get("section_title") if hasattr(item, "section_title") else ""
+						"section_title": item.get("section_title") if hasattr(item, "section_title") else "",
+						"technical_comment": item.get("technical_comment") if hasattr(item, "technical_comment") else ""
 					}
 					add_item_to_table(item, option, opportunity, other_fields=fields)
 				

@@ -7,8 +7,8 @@ frappe.ui.form.on("Opportunity", {
         frm.set_df_property('items', 'cannot_add_rows', true);
 		frm.set_df_property('items', 'cannot_delete_rows', true);
 
-        if (!frm.doc.parent_items) frm.toggle_display('parent_items', false);
-        if (frm.is_new) frm.doc.selected_option = 0
+        if (!frm.doc.parent_items || frm.doc.parent_items.length < 1) frm.toggle_display('parent_items', false);
+        if (!frm.is_new()) frm.doc.selected_option = 0
         else{
             if (frm.doc.with_items) frm.trigger("set_option")
         }
@@ -82,12 +82,37 @@ frappe.ui.form.on("Opportunity", {
 
         frm.set_df_property('items', 'cannot_add_rows', true);
 		frm.set_df_property('items', 'cannot_delete_rows', true);
-
-        if (!frm.doc.parent_items) frm.toggle_display('parent_items', false);
+        // Custom Update
+        frm.add_custom_button(__('Request For Quotation New Tab'),
+            function() {
+                frm.trigger("make_request_for_quotation111")
+            }, __('Create'));
+        // $("a[data-label='Request%20For%20Quotation']").addClass("hidden");
+        //Custom Update end
+        if (!frm.doc.parent_items || frm.doc.parent_items.length < 1) frm.toggle_display('parent_items', false);
         
         if (frm.is_new()) frm.doc.selected_option = 0; 
         else if (frm.doc.with_items) frm.trigger("set_option")
         
+        
+        // testing submit button
+            // if (frm.doc.option_1.length != 0 ){
+            //     frm.set_df_property('option1_submit', 'hidden', 0);
+            //     frm.set_df_property('option1_copy', 'hidden', 0);
+            // }
+            // if (frm.doc.option_2.length != 0 ){
+            //     frm.set_df_property('option2_submit', 'hidden', 0);
+            //     frm.set_df_property('option2_copy', 'hidden', 0);
+            // }
+            // if (frm.doc.option_3.length != 0){}
+            // if (frm.doc.option_4.length != 0 ){}
+            // if (frm.doc.option_5.length != 0 ){}
+            // if (frm.doc.option_6.length != 0 ){}
+            // if (frm.doc.option_7.length != 0 ){}
+            // if (frm.doc.option_8.length != 0 ){}
+            // if (frm.doc.option_9.length != 0 ){}
+            // if (frm.doc.option_10.length != 0 ){}
+        // testing submit button end
         if (!frm.is_new()){
             var num = 0;
             if (frm.doc.option_1.length != 0 ){num=num+1;}
@@ -208,108 +233,145 @@ frappe.ui.form.on("Opportunity", {
         };
     },
     set_option_items: async function(frm, option_number){
-        frm.doc.items=[];
-        switch (option_number){
-            case 1:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_1, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 2:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_2, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 3:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_3, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 4:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_4, resolve)
-                }).then(()=>{
-                    refresh_field("items"); 
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 5:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_5, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 6:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_6, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 7:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_7, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 8:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_8, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 9:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_9, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-            case 10:
-                new Promise((resolve)=> {
-                    group_similar_items(frm,frm.doc.option_10, resolve)
-                }).then(()=>{
-                    refresh_field("items");
-                    validate_product_bundle(frm);
-                }
-                )
-                break;
-        
-        }
+        let myPromise = new Promise((resolve, reject) => {
+            if (frm.doc.with_items != 1){
+                frappe.confirm(__("<b>With Items</b> field is not checked. Do you want to check it?"), function() {
+                    frm.doc.with_items = 1;
+                    console.log(frm.doc.with_items);
+                    frm.refresh_field("with_items");
+                    resolve();
+                })
+            }
+            else resolve();
+        })
+        myPromise.then(() => {
+            frm.doc.items=[];
+            switch (option_number){
+                case 1:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_1, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 2:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_2, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 3:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_3, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 4:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_4, resolve)
+                    }).then(()=>{
+                        refresh_field("items"); 
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 5:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_5, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 6:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_6, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 7:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_7, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 8:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_8, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 9:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_9, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+                case 10:
+                    new Promise((resolve)=> {
+                        group_similar_items(frm,frm.doc.option_10, resolve)
+                    }).then(()=>{
+                        refresh_field("items");
+                        validate_product_bundle(frm);
+                    }
+                    )
+                    break;
+            
+            }
+        })
     },
 
-    make_request_for_quotation: function(frm) {
+    make_request_for_quotation: function(frm) { 
 		frappe.model.open_mapped_doc({
 			method: "sabaintegration.overrides.opportunity.make_request_for_quotation",
 			frm: frm
 		})
 	},
+    make_request_for_quotation111: function(frm) {
+        var theWindow =  window.open(frm.docname,"_blank"),
+        theDoc = theWindow.document,
+        theScript = document.createElement('script');
+        function injectThis() {
+            var div1 = document.getElementsByClassName('inner-group-button');
+            if (div1.length > 0) {
+                var elements = document.querySelectorAll('[data-label="Request%20For%20Quotation"]');
+                elements[0].click();
+                return;
+            }
+            else{
+                setTimeout(injectThis, 300);
+            }
+        }
+        theScript.innerHTML = 'window.onload = ' + injectThis.toString() + ';';
+        theDoc.body.appendChild(theScript);
+
+	},
+    with_items: function(frm){
+        if (cur_frm.doc.with_items == 1)
+            frm.trigger("set_option")
+    },
+
     set_option: function(frm){
         let found = false;
         for(let row in cur_frm.doc.items){
@@ -330,12 +392,93 @@ frappe.ui.form.on("Opportunity", {
         if (option != 0){
             var x = document.querySelectorAll(".section-head");
             for (var i = 0; i < x.length; i++) {
-                if(x[i].innerHTML.indexOf("More Options Or Products") !== -1 && x[i].innerHTML.indexOf("Parents of Packed Items") == -1) {
+                if(x[i].innerHTML.indexOf("Selected Option Preview") !== -1 && x[i].innerHTML.indexOf("Bundle Items") == -1) {
                     x[i].innerHTML+= "<small id='option_number'  style='padding: 3px 10px; font-weight: 500;background:#fff5f5; margin:10px; color:#e24c4c;'>Option "+option+"</small>";
                 }
             }
         }
-    }
+    },
+    // new tasks alaa edits
+    // option1_submit(frm) {frm.toggle_enable("option_1", false);},
+    // option2_submit(frm) {frm.toggle_enable("option_2", false);},
+    // option3_submit(frm) {frm.toggle_enable("option_3", false);},
+    // option4_submit(frm) {frm.toggle_enable("option_4", false);},
+    // option5_submit(frm) {frm.toggle_enable("option_5", false);},
+    // option6_submit(frm) {frm.toggle_enable("option_6", false);},
+    // option7_submit(frm) {frm.toggle_enable("option_7", false);},
+    // option8_submit(frm) {frm.toggle_enable("option_8", false);},
+    // option9_submit(frm) {frm.toggle_enable("option_9", false);},
+    // option10_submit(frm) {frm.toggle_enable("option_10", false);},
+    // option1_copy(frm) {
+    //     if (frm.doc.option_1.length == 0){
+    //         cur_frm.set_value("option_1", frm.doc.option_1);
+    //         cur_frm.refresh_field("option_1");
+    //         // cur_frm.clear_table("items");
+    //     }
+    //     else if (frm.doc.option_2.length == 0){
+    //         frm.set_value("option_2", frm.doc.option_1);
+    //         frm.refresh_field("option_2");
+    //     }
+    //     else if (frm.doc.option_3.length == 0){
+    //         cur_frm.set_value("option_3", frm.doc.option_1);
+    //         frm.refresh_field("option_3");
+    //     }
+    //     else if (frm.doc.option_4.length == 0){
+    //         cur_frm.set_value("option_4", frm.doc.option_1);
+    //         frm.refresh_field("option_4");
+    //     }
+    //     else if (frm.doc.option_5.length == 0){
+    //         cur_frm.set_value("option_5", frm.doc.option_1);
+    //         frm.refresh_field("option_5");
+    //     }
+    //     else if (frm.doc.option_6.length == 0){
+    //         cur_frm.set_value("option_6", frm.doc.option_1);
+    //         frm.refresh_field("option_6");
+    //     }
+    //     else if (frm.doc.option_7.length == 0){
+    //         cur_frm.set_value("option_7", frm.doc.option_1);
+    //         frm.refresh_field("option_7");
+    //     }
+    //     else if (frm.doc.option_8.length == 0){
+    //         cur_frm.set_value("option_8", frm.doc.option_1);
+    //         frm.refresh_field("option_8");
+    //     }
+    //     else if (frm.doc.option_9.length == 0){
+    //         cur_frm.set_value("option_9", frm.doc.option_1);
+    //         frm.refresh_field("option_9");
+    //     }
+    //     else if (frm.doc.option_10.length == 0){
+    //         cur_frm.set_value("option_10", frm.doc.option_1);
+    //         frm.refresh_field("option_10");
+    //     }
+    // },
+    // option2_copy(frm) {
+
+    // },
+    // option3_copy(frm) {
+
+    // },
+    // option4_copy(frm) {
+
+    // },
+    // option5_copy(frm) {
+   
+    // },
+    // option6_copy(frm) {
+
+    // },
+    // option7_copy(frm) {
+
+    // },
+    // option8_copy(frm) {
+
+    // },
+    // option9_copy(frm) {
+   
+    // },
+    // option10_copy(frm) {
+
+    // },
 });
 
 frappe.ui.form.on('Opportunity Item', { 
@@ -465,7 +608,7 @@ const validate_product_bundle = async (frm) => {
     frappe.dom.unfreeze()
     
 };
-
+///NOT USED FOR NOW
 const update_product_bundle = async (frm, row, cdt, cdn, method) => {
     frappe.dom.freeze()
     if (!frm.doc.items) {
@@ -554,6 +697,8 @@ const get_packed_items = async (parent) => {
 
     return product_bundle
 }
+
+///NOT USED FOR NOW
 const update_packed_items_qty = async (product_bundle_items, row) => {
     for (const bundled_item of product_bundle_items) {
         for (const packed_item of cur_frm.doc.parent_items){

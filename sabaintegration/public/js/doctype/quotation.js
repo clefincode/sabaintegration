@@ -5,7 +5,25 @@
 {% include 'sabaintegration/selling/sales_common.js' %}
 
 frappe.ui.form.on('Quotation', {
-
+	setup: function(frm){
+		if (frm.doc.option_number_from_opportunity > 0 ){
+			frm.toggle_display('option_number_from_opportunity', true)
+		}
+	},
+	after_save: function(frm){
+		if (frm.doc.option_number_from_opportunity > 0 ){
+			frm.toggle_display('option_number_from_opportunity', true)
+		}
+	},
+	total_margin: function(frm){
+		if (frm.doc.items){		
+			$.each(frm.doc.items || [], function(i, d) {
+				d.margin_from_supplier_quotation = frm.doc.total_margin / frm.doc.items.length;
+				frm.script_manager.trigger("margin_from_supplier_quotation", d.doctype, d.name);
+			});
+			refresh_field("items");
+		}
+	}
 });
 
 erpnext.selling.QuotationController = erpnext.selling.CustomSellingController.extend({
