@@ -24,6 +24,10 @@ frappe.ui.form.on("Request for Quotation",{
 
 			frm.page.set_inner_btn_group_as_primary(__('Create'));
 		}
+		else if (frm.doc.docstatus === 0 && frm.doc.packed_items){
+			frm.add_custom_button(__('Delete By Brand'),
+				function(){ frm.trigger("delete_by_brand");});
+		}
 
 	},
 
@@ -88,6 +92,82 @@ frappe.ui.form.on("Request for Quotation",{
 
 		dialog.show()
 	},
+
+	delete_by_brand: async function(frm){
+		frm.events.setup_by_brand(frm, async (frm, data, brands) => {
+			frappe.call({
+				method: "sabaintegration.overrides.request_for_quotation.delete_by_brand",
+				args: {
+					items: frm.doc.items,
+					packed_items: frm.doc.packed_items,
+					brands: brands
+				},
+				freeze: true,
+				callback: function(r) {
+					if(r.message) {
+						if (r.message.items)
+						{
+							frm.doc.items = r.message.items;
+							frm.refresh_field("items");
+						}
+						if (r.message.packed_items)
+						{
+							frm.doc.packed_items = r.message.packed_items;
+							frm.refresh_field("packed_items");
+						}
+						frm.dirty();
+					}
+				}
+			});
+			
+		})
+	},
+
+	setup_by_brand: async function(frm, callback) {
+		frappe.dom.freeze(__('Please Wait...'))
+		let items_brands = [];
+		let tested_rows = []
+		for (const item of cur_frm.doc.items){
+			if (!tested_rows.includes(item.brand))
+			{
+				tested_rows.push(item.brand);
+				const exists = await frappe.db.get_list("Product Bundle", {filters : {new_item_code: item.item_code}});
+				if (!exists || !exists.length) items_brands.push(item.brand);
+			}
+		}
+		frappe.dom.unfreeze()
+		const field = [
+			{	
+				"fieldtype": "Table",
+				"label": __("Brands"),
+				"fieldname": "brands",
+				"fields": [
+					{
+						fieldname: "brand",
+						options: "Brand",
+						label: __("Brand"),
+						fieldtype: "Link",
+						in_list_view: 1,
+						reqd: 1,
+						get_query: () => {
+							return {
+								filters: [
+									["Brand", "name", "in", frm.doc.packed_items.map((row) => {return row.brand;}) + ',' + 
+									//frm.doc.items.map((row) => {return row.brand;})
+									items_brands]
+								]
+							}
+						}
+					}
+				],
+			}
+		];
+		let dialog = frappe.prompt(field, data => {
+			let brands = data.brands || [];
+			callback(frm, data, brands);
+		})
+		dialog.fields_dict.brands.grid.refresh();
+	}
 })
 
 frappe.ui.form.on("Request for Quotation Item", {
@@ -183,11 +263,9 @@ const update_product_bundle = async (frm, row, method) => {
 								if (r.message){
 									frm.doc.packed_items = [];
 									frm.refresh_field("packed_items");
-									console.log(r.message)
 									r.message.forEach((row) => {
 										let item = frm.add_child("packed_items");
 										$.extend(item, row);
-										console.log(row);
 										item.item_code = item.item_code || ''
 										item.qty = item.qty || 0;
 										item.item_name = item.item_name || '';

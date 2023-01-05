@@ -1,0 +1,28 @@
+{
+ "attach_print": 0,
+ "channel": "Email",
+ "condition": "doc.opportunity and\\\ndoc.supplier and\\\ndoc.contact_email and\\\ndoc.supplier_group == \"SABA Employees\"",
+ "creation": "2023-01-04 15:13:24.425766",
+ "days_in_advance": 0,
+ "docstatus": 0,
+ "doctype": "Notification",
+ "document_type": "Supplier Quotation",
+ "enabled": 0,
+ "event": "New",
+ "idx": 0,
+ "is_standard": 1,
+ "message": "A New Supplier Quotation <a href='/app/supplier-quotation/{{doc.name}}'><b>{{doc.name}}</b></a> has been created ",
+ "modified": "2023-01-05 10:37:19.317973",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "A New Supplier Quotation",
+ "owner": "Administrator",
+ "recipients": [
+  {
+   "receiver_by_document_field": "contact_email"
+  }
+ ],
+ "send_system_notification": 1,
+ "send_to_all_assignees": 0,
+ "subject": "A New Supplier Quotation {{doc.name}} is created"
+}

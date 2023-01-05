@@ -9,17 +9,34 @@ from frappe import _
 from frappe.model.mapper import get_mapped_doc
 
 from erpnext.accounts.party import get_party_account_currency, get_party_details
-from erpnext.buying.utils import validate_for_items
 from erpnext.stock.doctype.material_request.material_request import set_missing_values
 from erpnext.buying.doctype.request_for_quotation.request_for_quotation import RequestforQuotation
-from sabaintegration.stock.get_item_details import get_item_warehouse
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 
+from sabaintegration.stock.get_item_details import get_item_warehouse
+from sabaintegration.overrides.opportunity import add_item_to_table
 
 class CustomRequestforQuotation(RequestforQuotation):
     def validate(self):
         super(CustomRequestforQuotation, self).validate()
+        if self.is_new():
+            self.create_copied_option()
         self.validate_bundle_items()
+    
+    def on_cancel(self):
+        super(CustomRequestforQuotation, self).on_cancel()
+        self.delete_copied_option()
+    
+    def after_delete(self):
+        if self.docstatus == 0:
+            self.delete_copied_option()
+
+    def delete_copied_option(self):
+        copied_option = frappe.db.get_all("Copied Opportunity Option", {"request_for_quotation":self.name}, "name")
+        if copied_option:
+            doc = frappe.get_doc("Copied Opportunity Option", copied_option[0]["name"])
+            doc.delete()
+            frappe.db.commit()
 
     def validate_bundle_items(self):
         """Check if product bundle item that is in items table 
@@ -52,22 +69,53 @@ class CustomRequestforQuotation(RequestforQuotation):
                 i += 1
         self.update({"items": itemslist})
 
+    def create_copied_option(self):
+        "Create Copied Opportunity Option if the rfq comes from an opportunity"
+        if not self.opportunity:
+            return
+
+        option_number = 0
+        for item in self.items:
+            if item.opportunity_option_number:
+                option_number = item.opportunity_option_number
+                break
+
+        if option_number:
+            filters = {
+                "parent": self.opportunity,
+                "parentfield": "option_"+str(option_number)
+            }
+            copied_option = frappe.new_doc("Copied Opportunity Option")
+            opportunity_option = frappe.db.get_all("Opportunity Option", filters, ['*'])
+            optionlist = []
+            for option in opportunity_option:
+                add_item_to_table(option, optionlist, other_fields={
+                    "section_title": option.get("section_title"),
+                    "technical_comment": option.get("technical_comment")
+                })
+            copied_option.update({"opportunity_option": optionlist})
+            copied_option.opportunity = self.opportunity
+            copied_option.option_number = option_number
+            copied_option.request_for_quotation = self.name
+            copied_option.insert()
+            frappe.db.commit()
+
     def autoname(self):
         ###If this rfq is coming from an opportunity option,
         ###then the name of rfq will include the opportunity name and option
         is_from_opp = False
-        opportunity = None
+        opportunityTitle = None
         option_number = None
         for item in self.get("items"):
             if item.opportunity and item.opportunity_option_number: 
-                opportunity = item.opportunity
+                opportunityTitle = frappe.db.get_value("Opportunity", item.opportunity, "title") or item.opportunity
                 option_number = item.opportunity_option_number
                 is_from_opp = True
                 break
         if is_from_opp:
             from frappe.model.naming import make_autoname
 
-            name = "PUR-RFQ-{0}-OP{1}-".format(opportunity, option_number)
+            name = "Option{0}-{1}-".format(option_number, opportunityTitle)
             self.name= make_autoname(name+".####", "", self)
 
         else:
@@ -151,6 +199,54 @@ def _order_by_brand(table, items_list, brand_list = None, company = None):
             })
     return table
 
+@frappe.whitelist()
+def delete_by_brand(items, packed_items, brands):
+    messages = {}
+    if brands: brands = json.loads(brands)
+    if len(items) > 0:
+        itemslist = []
+        items = json.loads(items)
+        i = 1
+        for item in items:
+            # found = False
+            if not frappe.db.exists("Product Bundle", {"new_item_code": item["item_code"]}):
+                for brand in brands:
+                    if (item["brand"] == brand["brand"]):
+                        # found = True
+                        item["idx"] = i
+                        itemslist.append(item)
+                        i += 1
+                        break
+            else: 
+                item["idx"] = i
+                itemslist.append(item)
+                i += 1
+            # if not found:
+            #     item["idx"] = item["idx"] - i
+            #     itemslist.append(item)
+
+        messages["items"] = itemslist
+
+    if len(packed_items) > 0:
+        itemslist = []
+        packed_items = json.loads(packed_items)
+        i = 1
+        for item in packed_items:
+            # found = False
+            for brand in brands:
+                if (item["brand"] == brand["brand"]):
+                    # found = True
+                    item["idx"] = i
+                    itemslist.append(item)
+                    i += 1
+                    break
+            # if not found:
+            #     item["idx"] = item["idx"] - i
+            #     itemslist.append(item)
+
+        messages["packed_items"] = itemslist
+
+    return messages
 
 @frappe.whitelist()
 def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=None):
@@ -173,6 +269,8 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
             target_doc.buying_price_list = args.buying_price_list or frappe.db.get_value(
                 "Buying Settings", None, "buying_price_list"
             )
+            if source.opportunity: target_doc.opportunity = source.opportunity
+            target_doc.supplier_group = frappe.db.get_value("Supplier", for_supplier, "supplier_group")
         set_missing_values(source, target_doc)
 
     doclist = get_mapped_doc(
@@ -231,6 +329,8 @@ def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None
             target_doc.buying_price_list = args.buying_price_list or frappe.db.get_value(
                 "Buying Settings", None, "buying_price_list"
             )
+        if source.opportunity: target_doc.opportunity = source.opportunity
+        target_doc.supplier_group = frappe.db.get_value("Supplier", for_supplier, "supplier_group")
         set_missing_values(source, target_doc)
 
     doclist = get_mapped_doc(

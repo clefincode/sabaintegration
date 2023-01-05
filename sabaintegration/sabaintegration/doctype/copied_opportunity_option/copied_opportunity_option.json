@@ -1,0 +1,92 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{opportunity}-{option_number}-{####}",
+ "creation": "2022-12-28 09:54:44.062491",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "opportunity",
+  "option_number",
+  "request_for_quotation",
+  "column_break_4",
+  "in_quotation",
+  "quotation",
+  "section_break_8",
+  "opportunity_option"
+ ],
+ "fields": [
+  {
+   "fieldname": "opportunity",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Opportunity",
+   "options": "Opportunity",
+   "reqd": 1
+  },
+  {
+   "fieldname": "option_number",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Option Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "request_for_quotation",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Request for Quotation Name"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "in_quotation",
+   "fieldtype": "Check",
+   "label": "In Quotation"
+  },
+  {
+   "fieldname": "quotation",
+   "fieldtype": "Link",
+   "label": "Quotation",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "opportunity_option",
+   "fieldtype": "Table",
+   "label": "Opportunity Option",
+   "options": "Opportunity Option",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_8",
+   "fieldtype": "Section Break"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2022-12-28 11:52:59.399688",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Copied Opportunity Option",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

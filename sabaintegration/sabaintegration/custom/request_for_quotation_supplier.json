@@ -1,0 +1,32 @@
+{
+ "custom_fields": [],
+ "custom_perms": [],
+ "doctype": "Request for Quotation Supplier",
+ "property_setters": [
+  {
+   "_assign": null,
+   "_comments": null,
+   "_liked_by": null,
+   "_user_tags": null,
+   "creation": "2022-12-22 13:17:02.975454",
+   "default_value": null,
+   "doc_type": "Request for Quotation Supplier",
+   "docstatus": 0,
+   "doctype_or_field": "DocField",
+   "field_name": "send_email",
+   "idx": 0,
+   "modified": "2022-12-22 13:17:02.975454",
+   "modified_by": "hossam@saba-eg.com",
+   "name": "Request for Quotation Supplier-send_email-default",
+   "owner": "hossam@saba-eg.com",
+   "parent": null,
+   "parentfield": null,
+   "parenttype": null,
+   "property": "default",
+   "property_type": "Text",
+   "row_name": null,
+   "value": "0"
+  }
+ ],
+ "sync_on_migrate": 1
+}

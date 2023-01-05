@@ -20,7 +20,7 @@ class CustomQuotation(Quotation):
 
 		self.add_item_name_in_packed()
 		make_packing_list(self) 
-		##self.validate_rates()
+
 		self.update_total_margin()
 		self.set_option_number()
 
@@ -30,14 +30,6 @@ class CustomQuotation(Quotation):
 				for i in range(len(self.get("packed_items"))):
 					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code:
 						self.packed_items[i].parent_detail_docname = item_row.name
-	
-	# def validate_rates(self):
-	# 	if self.has_value_changed("conversion_rate") and self.supplier_quotations:
-	# 		for item in self.get("items"):
-	# 			item.rate_without_profit_margin = item.rate_without_profit_margin / self.get("conversion_rate")
-	# 			item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
-	# 		for item in self.get("packed_items"):
-	# 			item.rate = item.rate / self.get("conversion_rate")
 	
 	def update_total_margin(self):
 		self.total_margin = 0
@@ -97,7 +89,7 @@ class CustomQuotation(Quotation):
 						i += 1
 				if not found:
 					frappe.throw("""You can't submit this document now until you add
-					all items of <b>{0}</b> from the opportunity <b>{1}</b>.<br>
+					all items of <b>{0}</b> from the opportunity <a href='/app/opportunity/{1}'><b>{1}</b></a>.<br>
 					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
 					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
 	
@@ -131,7 +123,7 @@ def make_packing_list(doc):
 	reset = reset_packing_list(doc, from_option)
 
 	for item_row in doc.get("items"):
-		if item_row.opportunity:
+		if item_row.opportunity and item_row.opportunity_option_number:
 			continue
 		if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}):
 			for bundle_item in get_product_bundle_items(item_row.item_code):
@@ -172,7 +164,9 @@ def check_bundle_items(parent_item, packed_table):
 
 def check_if_from_opportunity_option(doc):
 	if doc.supplier_quotations:
-		return True
+		for item in doc.items:
+			if item.opportunity and item.opportunity_option_number:
+				return True
 
 def reset_packing_list(doc, from_option):
 	"Conditionally reset the table and return if it was reset or not."
@@ -195,16 +189,35 @@ def reset_packing_list(doc, from_option):
 
 	if reset_table and not from_option:
 		doc.set("packed_items", [])
-	elif reset_table and from_option:
+	elif from_option:
+		if not reset_table:
+			items_before_save = [(item.item_code, item.qty) for item in doc_before_save.get("items")]
+			items_after_save = [(item.item_code, item.qty) for item in doc.get("items")]
+			reset_qty = items_before_save != items_after_save
+			
+			if not reset_qty: return reset_table
+		# check every packed item if its parent exists
+		from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 		packeditems = []
 		i = 1
 		for item in doc.get("packed_items"):
 			for p_item in doc.get("items"):
-				if item.parent_item == p_item.item_code:
-					item.idx = i
-					packeditems.append(item)
-					i += 1
+				#if exists then check the qty
+				if item.parent_item == p_item.item_code and item.section_title == p_item.section_title:
+					if not p_item.opportunity and not p_item.opportunity_option_number:
+						break
+					for packed in get_product_bundle_items(p_item.item_code):
+						if packed.item_code == item.item_code:
+							# if the packed qty is greater than the required then reset it
+							# if the qty is less than the required then it means that the remainder qty hasn't yet received
+							if packed.qty * p_item.qty < item.qty:
+								item.qty = packed.qty * p_item.qty
+							break
+					if reset_table:
+						item.idx = i
+						packeditems.append(item)
+						i += 1
 					break
 
-		doc.set("packed_items", packeditems)
+		if reset_table: doc.set("packed_items", packeditems)
 	return reset_table

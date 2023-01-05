@@ -321,7 +321,7 @@ def make_request_for_quotation(source_name, target_doc=None):
         inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
         left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
         where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and 
-        (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty))
+        (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty and rfqi.docstatus != 2))
         """.format(source_name), as_dict = 1)
 
         for item in items:
