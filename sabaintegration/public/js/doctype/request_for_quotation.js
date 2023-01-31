@@ -107,12 +107,23 @@ frappe.ui.form.on("Request for Quotation",{
 					if(r.message) {
 						if (r.message.items)
 						{
-							frm.doc.items = r.message.items;
+							frm.clear_table("items");
+							frm.refresh_field("items");
+							r.message.items.forEach((row) => {
+								let item = frm.add_child("items");
+								$.extend(item, row);
+								item.warehouse = item.warehouse || '';
+							});
 							frm.refresh_field("items");
 						}
 						if (r.message.packed_items)
 						{
-							frm.doc.packed_items = r.message.packed_items;
+							frm.clear_table("packed_items");
+							r.message.packed_items.forEach((row) => {
+								let item = frm.add_child("packed_items");
+								$.extend(item, row);
+								item['warehouse'] = item['warehouse'] || '';
+							});
 							frm.refresh_field("packed_items");
 						}
 						frm.dirty();
@@ -287,8 +298,10 @@ const update_product_bundle = async (frm, row, method) => {
 	}
 	else if (method == "qty"){
 		const packed_items = await get_packed_items(row);
-		if (!packed_items) return;
-
+		if (!packed_items) {
+			frappe.dom.unfreeze();
+			return;
+		}
 		for (const packed_item of packed_items.items){
 			for (let pitem of cur_frm.doc.packed_items){
 				if (pitem.item_code == packed_item.item_code){
