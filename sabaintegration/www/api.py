@@ -180,7 +180,8 @@ def group_similar_items(doc):
 		if not item.qty : item.qty = 0
 		if not item.stock_qty : item.stock_qty = 0 
 		if not item.amount : item.amount = 0.00 
-		key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
+		key = item.item_code + "_" + item.warehouse
+		#key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
 		group_item_qty[key] = group_item_qty.get(key, 0) + item.qty
 		group_item_amount[key] = group_item_amount.get(key, 0) + item.amount
 		group_item_stock_qty[key] = group_item_stock_qty.get(key, 0) + item.stock_qty
@@ -188,7 +189,8 @@ def group_similar_items(doc):
 
 	duplicate_list = []
 	for item in doc.items:
-		key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
+		key = item.item_code + "_" + item.warehouse
+		#key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
 		if key in group_item_qty:
 			count += 1
 			item.qty = group_item_qty[key]
