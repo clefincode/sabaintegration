@@ -87,20 +87,21 @@ class CustomSupplierQuotation(SupplierQuotation):
                 #check if other has at least one supplier quotation with draft status
                 # if not, check the next copied option
                 request_for_quotation = frappe.db.get_value("Copied Opportunity Option", copied_option.name, "request_for_quotation")
-                supplier_quotation = check_supplier_quotations_status(request_for_quotation)
                 
-                if has_supplier_quotation_to_create(request_for_quotation):
-                    frappe.throw("""You can't submit this supplier quotation. 
-                        You have a request for quotation <a href='/app/request-for-quotation/{0}'><b>{0}</b></a> with no supplier quotation.
-                        Creat supplier quotations from it and then submit them before submitting this one.""".format(request_for_quotation))
-
-                if not supplier_quotation:
-                    continue
-
                 copied_option_doc= frappe.get_doc("Copied Opportunity Option", copied_option.name)
                 tosubmit = check_option_items(doc.opportunity_option, copied_option_doc)
+                
                 #if options are not equal to each other then don't submit this doc
                 if not tosubmit:
+                    if has_supplier_quotation_to_create(request_for_quotation):
+                        frappe.throw("""You can't submit this supplier quotation. 
+                            You have a request for quotation <a href='/app/request-for-quotation/{0}'><b>{0}</b></a> with no supplier quotation.
+                            Creat supplier quotations from it and then submit them before submitting this one.""".format(request_for_quotation))
+                    
+                    supplier_quotation = check_supplier_quotations_status(request_for_quotation)
+                    if not supplier_quotation:
+                        continue
+
                     if supplier_quotation == True:
                         frappe.throw("""You can't submit this supplier quotation. 
                         You have a request for quotation <a href='/app/request-for-quotation/{0}'><b>{0}</b></a> with no supplier quotation.
@@ -111,9 +112,18 @@ class CustomSupplierQuotation(SupplierQuotation):
     
 def check_option_items(doc_option, copied_option):
     copied_option_items = copied_option.opportunity_option
-    doc_list = [(row.item_code, row.qty) for row in doc_option]
-    copied_option_list = [(row.item_code, row.qty) for row in copied_option_items]
-    return doc_list == copied_option_list
+    items = deepcopy(copied_option_items)
+    for row in doc_option:
+        found = False
+        for sec_row in items:
+            if row.item_code == sec_row.item_code and row.section_title == sec_row.section_title:
+                if row.qty <= sec_row.qty:
+                    found = True
+                items.remove(sec_row)
+                break
+        if not found:
+            return False
+    return True
 
 def check_supplier_quotations_status(request_for_quotation):
     "Get Supplier Quotation of the Request with draft status"
