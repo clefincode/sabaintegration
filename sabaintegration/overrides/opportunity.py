@@ -220,6 +220,7 @@ def get_item_details(item_code, company = None):
 
 @frappe.whitelist()
 def make_request_for_quotation(source_name, target_doc=None):
+    from frappe.utils import now, today, add_months
     def update_item(obj, target, source_parent):
         target.conversion_factor = 1.0
 
@@ -345,7 +346,8 @@ def make_request_for_quotation(source_name, target_doc=None):
                 "opportunity_item": item.name
             }
             add_item_to_table(item, "items", doclist, fields)
-        
+    doclist.transaction_date = now()
+    doclist.schedule_date = add_months(today(), 1)
     return doclist
 
 def add_item_to_table(item, table = None, doc = None, other_fields = None):
