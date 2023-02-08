@@ -24,6 +24,18 @@ class CustomRequestforQuotation(RequestforQuotation):
             self.create_copied_option()
         self.validate_bundle_items()
     
+    def on_submit(self):
+        super(CustomRequestforQuotation, self).on_submit()
+        self.create_sq_automatically()
+
+    def create_sq_automatically(self):
+        if len(self.suppliers) == 1:
+            doc = first_supplier_quotation(self.name, for_supplier = self.suppliers[0].supplier, to_save = True)
+            doc.save()
+            frappe.db.commit()
+            self.reload()
+            frappe.msgprint("A Supplier Quotation <a href='/app/supplier-quotation/{0}'><b>{0}</b></a> is created".format(doc.name))
+
     def on_cancel(self):
         super(CustomRequestforQuotation, self).on_cancel()
         self.delete_copied_option()
@@ -283,7 +295,7 @@ def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=
     doclist.valid_till = add_months(today(), 1)
     return doclist
 
-def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
+def first_supplier_quotation(source_name, target_doc=None, for_supplier=None, to_save = None):
     def postprocess(source, target_doc):
         if for_supplier:
             target_doc.supplier = for_supplier
@@ -325,6 +337,7 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                     found = True
                     doclist.items[i].qty += item.qty
                     newitems = doclist.items
+                    if to_save and not doclist.items[i].warehouse: doclist.items[i].warehouse = "General - S"
                     break
                 i += 1
                     
@@ -337,7 +350,13 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                 sqi.uom = item.uom
                 sqi.request_for_quotation = item.parent
                 sqi.warehouse = item.get("warehouse") or ""
+                if to_save and not sqi.warehouse: sqi.warehouse = "General - S"
                 newitems.append(sqi)
+    if to_save:
+        for item in newitems:
+            if not item.warehouse:
+                item.warehouse = "General - S"
+
     doclist.update({
         "items": newitems
     })

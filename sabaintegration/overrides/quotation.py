@@ -28,13 +28,32 @@ class CustomQuotation(Quotation):
 		for item_row in self.get("items"):
 			if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}) and item_row.opportunity:
 				for i in range(len(self.get("packed_items"))):
-					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code:
+					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code and self.packed_items[i].get("section_title") == item_row.get("section_title"):
 						self.packed_items[i].parent_detail_docname = item_row.name
 	
+	def update_items_table(self):
+		itemslist = []
+		i = 1
+		for item in self.get("items"):
+			if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}): 
+				item.idx = i
+				itemslist.append(item)
+				i += 1
+				continue
+
+			for packed_item in self.get("packed_items"):
+				if item.item_code == packed_item.parent_item and packed_item.get("section_title") == item.get("section_title"):
+					item.idx = i
+					itemslist.append(item)
+					i += 1
+					break
+		self.update({"items": itemslist})
+
 	def update_total_margin(self):
-		self.total_margin = 0
+		self.total_rate_without_margin = 0
 		for item in self.items:
-			self.total_margin += item.margin_from_supplier_quotation
+			self.total_rate_without_margin = self.total_rate_without_margin + (item.rate_without_profit_margin * item.qty)
+		self.total_margin = (self.total - self.total_rate_without_margin) / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
 	def set_option_number(self):
 		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
@@ -139,6 +158,7 @@ def make_packing_list(doc):
 				update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, doc)
 				update_packed_item_price_data(pi_row, item_data, doc)
 				update_packed_item_from_cancelled_doc(item_row, bundle_item, pi_row, doc)
+				pi_row.rate_before_margin = pi_row.rate if not pi_row.get("margin") else pi_row.rate / (pi_row.get('margin') - 1)
 
 				if set_price_from_children:  # create/update bundle item wise price dict
 					update_product_bundle_rate(parent_items_price, pi_row)
