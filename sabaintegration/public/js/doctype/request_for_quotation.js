@@ -25,10 +25,12 @@ frappe.ui.form.on("Request for Quotation",{
 			frm.page.set_inner_btn_group_as_primary(__('Create'));
 		}
 		else if (frm.doc.docstatus === 0 && frm.doc.packed_items){
-			frm.add_custom_button(__('Delete By Brand'),
-				function(){ frm.trigger("delete_by_brand");});
+			frm.add_custom_button(__('Select Brands'),
+				function(){ frm.trigger("select_brands");});
 		}
-
+		if (frm.is_new()){
+			frm.trigger("schedule_date");
+		}
 	},
 
     make_supplier_quotation_opp: function(frm) {
@@ -93,7 +95,7 @@ frappe.ui.form.on("Request for Quotation",{
 		dialog.show()
 	},
 
-	delete_by_brand: async function(frm){
+	select_brands: async function(frm){
 		frm.events.setup_by_brand(frm, async (frm, data, brands) => {
 			frappe.call({
 				method: "sabaintegration.overrides.request_for_quotation.delete_by_brand",
@@ -137,7 +139,14 @@ frappe.ui.form.on("Request for Quotation",{
 	setup_by_brand: async function(frm, callback) {
 		frappe.dom.freeze(__('Please Wait...'))
 		let items_brands = [];
-		let tested_rows = []
+		let tested_rows = [];
+		for (const item of cur_frm.doc.packed_items){
+			if (!tested_rows.includes(item.brand))
+			{
+				tested_rows.push(item.brand);
+				items_brands.push(item.brand);
+			}
+		}
 		for (const item of cur_frm.doc.items){
 			if (!tested_rows.includes(item.brand))
 			{
@@ -163,9 +172,7 @@ frappe.ui.form.on("Request for Quotation",{
 						get_query: () => {
 							return {
 								filters: [
-									["Brand", "name", "in", frm.doc.packed_items.map((row) => {return row.brand;}) + ',' + 
-									//frm.doc.items.map((row) => {return row.brand;})
-									items_brands]
+									["Brand", "name", "in",  items_brands]
 								]
 							}
 						}
@@ -177,6 +184,12 @@ frappe.ui.form.on("Request for Quotation",{
 			let brands = data.brands || [];
 			callback(frm, data, brands);
 		})
+		let i = 1;
+		dialog.fields_dict.brands.df.data = [];
+		for (let row of items_brands){
+			dialog.fields_dict.brands.df.data.push({"idx": i, "brand": row});
+			i += 1;
+		}
 		dialog.fields_dict.brands.grid.refresh();
 	}
 })
