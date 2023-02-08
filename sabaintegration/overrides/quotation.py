@@ -24,6 +24,9 @@ class CustomQuotation(Quotation):
 		self.update_total_margin()
 		self.set_option_number()
 
+		if self.is_new():
+			self.set_title()
+
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
 			if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}) and item_row.opportunity:
@@ -56,10 +59,16 @@ class CustomQuotation(Quotation):
 		self.total_margin = (self.total - self.total_rate_without_margin) / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
 	def set_option_number(self):
+		if self.option_number_from_opportunity: return
+
 		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
 		if opportunity_option:
 			self.option_number_from_opportunity =opportunity_option
-			
+	
+	def set_title(self):
+		if self.supplier_quotations:
+			self.title = frappe.db.get_value("Supplier Quotation", self.supplier_quotations[0].supplier_quotation, "title")
+
 	def before_submit(self):
 		if self.supplier_quotations: self.check_opportunity()
 
