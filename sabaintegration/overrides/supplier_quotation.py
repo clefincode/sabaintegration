@@ -463,9 +463,9 @@ def make_quotation(source_name, target_doc=None):
         #if quotation: 
         doclist.save()
         
-        # if copied_opportunity_option:
-        #     frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "in_quotation", 1)
-        #     frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "quotation", doclist.name)
+        if copied_opportunity_option:
+            frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "in_quotation", 1)
+            frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "quotation", doclist.name)
         msg = ""
         if not quotation:
             msg = "Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is created".format(doclist.name) 
