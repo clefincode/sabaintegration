@@ -26,6 +26,20 @@ class CustomQuotation(Quotation):
 
 		if self.is_new():
 			self.set_title()
+	
+	def after_insert(self):
+		self.assign_quote()
+	
+	def assign_quote(self):
+		if check_if_from_opportunity_option(self):
+			opportunity = self.supplier_quotations[0].get("opportunity")
+			if opportunity :
+				user = frappe.db.get_value("Opportunity", opportunity, "opportunity_owner")
+				from frappe.desk.form.assign_to import add
+				try:
+					add({"doctype": self.doctype, "name": self.name, "assign_to": [user]})
+				except Exception:
+					frappe.msgprint("Couldn't assign the quotation to its sales man")
 
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
