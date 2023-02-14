@@ -128,7 +128,7 @@ class CustomRequestforQuotation(RequestforQuotation):
         if is_from_opp:
             from frappe.model.naming import make_autoname
 
-            name = "Option{0}-{1}-".format(option_number, opportunityTitle)
+            name = "{0}-Option{1}-".format(opportunityTitle, option_number)
             self.name= make_autoname(name+".####", "", self)
 
         else:
