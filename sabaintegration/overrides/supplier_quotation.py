@@ -7,6 +7,7 @@ from copy import deepcopy
 from frappe import _
 from frappe.utils import flt
 from frappe.model.mapper import get_mapped_doc
+from frappe.utils import now
 
 from erpnext.buying.doctype.supplier_quotation.supplier_quotation import SupplierQuotation
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
@@ -20,6 +21,8 @@ class CustomSupplierQuotation(SupplierQuotation):
         if self.is_new():
             self.set_title()
             self.set_rfg_status()
+        elif self.get("_action") and self._action == 'submit':
+            self.submitting_date = now()
 
     def after_insert(self):
         self.reload()
@@ -42,7 +45,7 @@ class CustomSupplierQuotation(SupplierQuotation):
         if not opportunity or not opportunity_option_number: return
         
         opportunityTitle = frappe.db.get_value("Opportunity", opportunity, "title")
-        self.title = "Option{0}-{1}".format(opportunity_option_number, opportunityTitle)
+        self.title = "{0}-Option{1}".format(opportunityTitle, opportunity_option_number)
     
     def on_submit(self):
         super(CustomSupplierQuotation, self).on_submit()
@@ -244,12 +247,13 @@ def has_supplier_quotation_to_create(request_for_quotation):
 def make_quotation(source_name, target_doc=None):
     def set_missing_values(source, target):
         from erpnext.controllers.accounts_controller import get_default_taxes_and_charges
+        from erpnext import get_company_currency
 
         target.quotation_to = frappe.db.get_value("Opportunity", opportunity, "opportunity_from")
         target.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
         target.opportunity = opportunity
 
-        target.currency = get_party_account_currency(target.quotation_to, target.party_name, target.company)
+        target.currency = get_party_account_currency(target.quotation_to, target.party_name, target.company) or get_company_currency(target.company)
 
         target.conversion_rate = get_exchange_rate(target.currency, "USD")
         taxes = get_default_taxes_and_charges(
