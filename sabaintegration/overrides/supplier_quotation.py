@@ -504,3 +504,26 @@ def add_supplier_quotation_row(supplier_quotation, opportunity, opportunity_opti
     from_sq.opportunity_option_number = opportunity_option_number
     doc.append("supplier_quotations", from_sq)
 
+@frappe.whitelist()
+def set_rates(source_name, target_name):
+    source_doc = frappe.get_doc("Supplier Quotation", source_name)
+    target_doc = frappe.get_doc("Supplier Quotation", target_name)
+    itemslist = deepcopy(target_doc.items)
+    conversion_rate = get_exchange_rate(source_doc.currency, target_doc.currency)
+    
+    for item in itemslist:
+        for source_item in source_doc.items:
+            if item.item_code == source_item.item_code:
+                item.profit_margin = source_item.profit_margin
+                item.rate = source_item.rate / conversion_rate
+                item.amount = item.rate * item.qty if item.qty > 0 else 0
+                item.base_rate = source_item.get("base_rate")
+                item.net_rate = source_item.get("net_rate") / conversion_rate
+                item.base_net_rate = source_item.get("base_net_rate")
+                item.base_amount = item.get("base_rate") * item.qty if item.qty > 0 else 0
+                item.net_amount = item.get("net_rate") * item.qty if item.qty > 0 else 0
+                item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
+                item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
+                item.discount_amount = flt(item.rate - item.price_list_rate)
+    return itemslist
+

@@ -8,6 +8,30 @@ from frappe import _
 from erpnext.selling.doctype.quotation.quotation import Quotation
 
 class CustomQuotation(Quotation):
+	def onload(self):
+		if self.get("supplier_quotations"):
+			self.supplier_quotations_table = self.set_table_html()
+
+	def set_table_html(self):
+		submittedSQs = unsubmittedSQs = []
+		submittedSQs = copy.deepcopy(self.get("supplier_quotations"))
+		if not submittedSQs: return
+
+		elemtoadd = abs(len(unsubmittedSQs) - len(submittedSQs))
+		
+		unsubmittedSQs = list(set(get_unsubmitted_sq(self)))
+
+		if elemtoadd:
+			if len(submittedSQs) > len(unsubmittedSQs):
+				for i in range(elemtoadd):
+					unsubmittedSQs.append("")
+			elif len(submittedSQs) < len(unsubmittedSQs):
+				for i in range(elemtoadd):
+					submittedSQs.append("")
+		SQs = list(zip(submittedSQs, unsubmittedSQs))
+
+		return frappe.render_template("templates/includes/supplier_quotations_table.html", {"SQs": SQs})
+
 	def validate(self):
 		super(Quotation, self).validate()
 		self.set_status()
@@ -115,8 +139,8 @@ class CustomQuotation(Quotation):
 				i = 0
 				notfounditem = option_item.item_code
 				for item in itemslist:
-						# if item is present with the same quantity and dection title, then check its bundles
-						if option_item.item_code == item.item_code and option_item.qty == item.qty and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
+						# if item is present with the same quantity and section title, then check its bundles
+						if option_item.item_code == item.item_code and option_item.qty <= item.qty and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
 								found = True
 								del itemslist[i]
@@ -264,3 +288,25 @@ def reset_packing_list(doc, from_option):
 
 		if reset_table: doc.set("packed_items", packeditems)
 	return reset_table
+
+def is_permitted_qty():
+	if 'Quotation change qty' in frappe.get_roles():
+		return True
+	return False
+
+def get_unsubmitted_sq(doc):
+	for item in doc.items:
+		if item.get("opportunity") and item.get("opportunity_option_number"):
+			opportunity = item.opportunity
+			option_number = item.opportunity_option_number
+			break
+	unsubmitted_sq = []
+	rfqs = frappe.db.get_all("Request for Quotation Item", {"opportunity": opportunity, "opportunity_option_number": option_number, "docstatus": 1}, "parent", distinct = 1)
+
+	for rfq in rfqs:
+		sqs = frappe.db.get_all("Supplier Quotation Item", {"request_for_quotation": rfq.parent, "docstatus": 0}, "parent")
+		if sqs:
+			for sq in sqs:
+				unsubmitted_sq.append(sq.parent)
+
+	return unsubmitted_sq

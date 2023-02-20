@@ -65,6 +65,11 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 
                 })
             }, __("Get Items From"));
+            
+            if (!this.frm.is_new())
+            this.frm.add_custom_button(__("Set Rates from Another SQ"),
+                () => {this.frm.trigger("set_rates")});
+
         }
     },
 
@@ -75,6 +80,53 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
         })
 
     },
+    
+    set_rates: function(){
+        let me = this;
+        var dialog = new frappe.ui.Dialog({
+			title: __("Choose a Supplier Quotation"),
+			fields: [
+				{	"fieldtype": "Link",
+					"label": __("Supplier Quotation"),
+					"fieldname": "supplier_quotation",
+					"options": 'Supplier Quotation',
+					"reqd": 1
+				}
+			],
+			primary_action_label: __("Submit"),
+			primary_action: (arg) => {
+				if(!arg) return;
+				dialog.hide();
+				return frappe.call({
+					type: "POST",
+					method: "sabaintegration.overrides.supplier_quotation.set_rates",
+					args: {
+						"source_name": arg.supplier_quotation,
+                        "target_name": me.frm.doc.name
+					},
+					freeze: true,
+					callback: function(r) {
+						if(r.message) {
+							me.frm.clear_table("items");
+                            me.frm.refresh_field("items");
+                            r.message.forEach((row) => {
+								let item = me.frm.add_child("items");
+								//$.extend(item, row);
+                                for (const field in row){
+                                    if (field != 'name')
+                                    item[field] = row[field];
+                                }
+							});
+							me.frm.refresh_field("items");
+						}
+					}
+				});
+			}
+		});
+
+		dialog.show()
+    },
+
     default_warehouse: function(frm){
         $.each(frm.items || [], function(i, d) {
 			if(!d.warehouse) d.warehouse = frm.default_warehouse;
