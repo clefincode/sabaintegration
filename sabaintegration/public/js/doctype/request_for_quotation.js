@@ -341,8 +341,8 @@ const update_product_bundle = async (frm, row, method) => {
 		}
 	}
 	else if (method == "remove"){
-		const exists = await frappe.db.get_list("Product Bundle", {filters : {new_item_code: parent.item_code}});
-		if (exists){
+		// const exists = await frappe.db.get_list("Product Bundle", {filters : {new_item_code: parent.item_code}});
+		// if (exists){
 			new Promise(function (resolve){
 				frappe.call({
 					doc: frm.doc,
@@ -364,11 +364,12 @@ const update_product_bundle = async (frm, row, method) => {
 								
 							});
 						}
+						else frm.doc.packed_items = [];
 						resolve(true);
 					}
 				})
 			}).then(() => {frm.refresh_field("packed_items");})
-		}
+		//}
 	}
 	frappe.dom.unfreeze()
 	frm.refresh_field("packed_items");

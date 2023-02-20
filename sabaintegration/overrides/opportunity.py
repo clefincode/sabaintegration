@@ -318,10 +318,10 @@ def make_request_for_quotation(source_name, target_doc=None):
         select distinct item.name, item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
         item.description, item.brand, item.image, item.parent, item.option_number
         #, rfqi.qty as r_qty
-        from `tabItem`
-        inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
+        from `tabOpportunity Item` as item 
         left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
-        where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and 
+        left outer join `tabProduct Bundle` as pd on item.item_code = pd.new_item_code
+        where  item.parent = '{}' and pd.new_item_code is null and
         (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty and rfqi.docstatus != 2))
         """.format(source_name), as_dict = 1)
 

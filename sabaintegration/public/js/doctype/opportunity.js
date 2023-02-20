@@ -23,6 +23,7 @@ frappe.ui.form.on("Opportunity", {
         
     },
     onload(frm){
+        if (frm.doc.items) frm.trigger("set_option")
         //for submitted option to stay read only after refresh
         if  (frm.doc.option1status == "1") {frm.set_df_property('option_1', "read_only", 1);frm.set_df_property('option1_submit', 'hidden', 1);}
         if  (frm.doc.option2status == "1") {frm.set_df_property('option_2', "read_only", 1);frm.set_df_property('option2_submit', 'hidden', 1);}
@@ -241,6 +242,14 @@ frappe.ui.form.on("Opportunity", {
         if (document.getElementById('option_number')) {
             document.getElementById('option_number').remove();
         }
+        //custom update for showing option number beside indicator
+        if (document.querySelectorAll(".option_number_indicator").length>0) {
+            var optionhead = document.querySelectorAll(".option_number_indicator");
+            for (var i = 0; i < optionhead.length; i++) {
+                optionhead[i].remove();
+            }
+            
+        }
 
         if (option != 0){
             var x = document.querySelectorAll(".section-head");
@@ -249,7 +258,34 @@ frappe.ui.form.on("Opportunity", {
                     x[i].innerHTML+= "<small id='option_number'  style='padding: 3px 10px; font-weight: 500;background:#fff5f5; margin:10px; color:#e24c4c;'>Option "+option+"</small>";
                 }
             }
+            //custom update for showing option number beside indicator
+            var z = document.querySelectorAll(".page-head");
+            for (var i = 0; i < z.length; i++) {
+ 
+                if (window.getComputedStyle(z[i]).display === "none") {
+                }
+                else{
+                    var ind = document.querySelectorAll(".indicator-pill");
+                    for (var c = 0; c < ind.length; c++) {
+                        let width = ind[c].offsetWidth;
+                        let inner = ind[c].innerHTML;
+                        if(width>=150){
+                            ind[c].style.marginTop = "-24px";
+                        }
+                        else{
+                            ind[c].style.marginTop = "4px";
+                        }
+                        var span = ind[c].getElementsByTagName("span") ;
+                        if(span.length>0){
+                            span[0].innerHTML+= "<small class='option_number_indicator'   style='padding: 3px 10px; font-weight: 500;background:#fff5f5; margin:10px; '>Option "+option+"</small>";
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }            
         }
+        
     },
     // new tasks  edits
     to_submit(frm, option) {
