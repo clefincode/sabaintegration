@@ -237,7 +237,67 @@ frappe.ui.form.on('Quotation Item', {
 	},
 	qty: function(frm, cdt, cdn){
 		frm.trigger("set_total_without_margin");
+		if (frm.doc.supplier_quotations || frm.doc.opportunity){
+			if (frm.doc.packed_items ){
+				if (check_permission(frm) == false) return;
+				frappe.dom.freeze();
+				setTimeout(async () => {
+					var d = locals[cdt][cdn];
+					let packed_items = await get_packed_items(frm, d);
+					if (packed_items) update_packed_items_qty(frm, packed_items, d)
+					frappe.dom.unfreeze();
+				}, 2000)
+			}
+		}
+
 	}
 	
 
 })
+const check_permission = function(frm){
+	frappe.call({
+		method: "sabaintegration.overrides.quotation.check_permission_qty",
+		args: {
+			"user": frappe.session.user
+		},
+		freeze: true,
+		callback: function(r){
+			if (r.message == false){
+				frm.reload_doc()
+				frappe.throw("You don't have enough permission to edit qty of items that coming from opportunity")
+				return false;
+			}
+		}
+	})
+}
+
+const get_packed_items = async(frm, row) => {
+	const exists = await frappe.db.get_list("Product Bundle", {filters : {new_item_code: row.item_code}});
+	if (!exists || exists.length == 0) return false;
+
+	const product_bundle = await frappe.db.get_list(
+        "Product Bundle Item", {
+			filters: {parent: exists[0]['name']},
+			fields: ['item_code', 'qty']
+		}
+    );
+
+    return product_bundle
+}
+
+const update_packed_items_qty = async (frm, packed_items, row) => {
+	let items = packed_items;
+	for (let packed_item of frm.doc.packed_items){
+		let i = 0;
+		for (let item of items){
+			if (item.item_code == packed_item.item_code && packed_item.section_title == row.section_title){
+				packed_item.qty = item.qty * row.qty;
+				items.splice(i, 1);
+				break;
+			}
+			i += 1;
+		}
+	}
+	frm.refresh_field("packed_items")
+	
+}

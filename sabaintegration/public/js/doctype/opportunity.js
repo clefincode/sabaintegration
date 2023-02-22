@@ -534,7 +534,7 @@ const validate_product_bundle = async (frm) => {
     frm.refresh_field("parent_items");
     frm.trigger("set_option")
 
-    if (frm.doc.parent_items) frm.toggle_display('parent_items', true);
+    if (frm.doc.parent_items.length > 0) frm.toggle_display('parent_items', true);
     frappe.dom.unfreeze()
     
 };

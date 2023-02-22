@@ -140,7 +140,11 @@ class CustomQuotation(Quotation):
 				notfounditem = option_item.item_code
 				for item in itemslist:
 						# if item is present with the same quantity and section title, then check its bundles
-						if option_item.item_code == item.item_code and option_item.qty <= item.qty and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
+						if option_item.item_code == item.item_code and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
+							
+							if option_item.qty != item.qty and not check_permission_qty(frappe.session.user):
+								frappe.throw("Qty of item <b>{}</b> is not correct as in option".format(item.item_code))
+							
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
 								found = True
 								del itemslist[i]
@@ -310,3 +314,9 @@ def get_unsubmitted_sq(doc):
 				unsubmitted_sq.append(sq.parent)
 
 	return unsubmitted_sq
+
+@frappe.whitelist()
+def check_permission_qty(user):
+	if "0 Selling - Quotation edit qty" in frappe.get_roles():
+		return True
+	return False
