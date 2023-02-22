@@ -106,7 +106,8 @@ override_doctype_class = {
 	'Request for Quotation': 'sabaintegration.overrides.request_for_quotation.CustomRequestforQuotation',
 	'Quotation': 'sabaintegration.overrides.quotation.CustomQuotation',
 	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
-	'Employee': 'sabaintegration.overrides.employee.CustomEmployee'
+	'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
+	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry'
 }
 
 # Document Events
