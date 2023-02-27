@@ -81,8 +81,13 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 
     },
     
-    set_rates: function(){
+    set_rates: async function(){
         let me = this;
+        // let opportunity = "";
+        // if (me.frm.doc.items.length > 0 && me.frm.doc.items[0].request_for_quotation){
+        //     let rfq = me.frm.doc.items[0].request_for_quotation;
+        //     opportunity = await frappe.db.get_value("Request for Quotation", {"name": rfq}, "opportunity");
+        // }
         var dialog = new frappe.ui.Dialog({
 			title: __("Choose a Supplier Quotation"),
 			fields: [
@@ -90,7 +95,14 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 					"label": __("Supplier Quotation"),
 					"fieldname": "supplier_quotation",
 					"options": 'Supplier Quotation',
-					"reqd": 1
+					"reqd": 1,
+                    get_query: function(){
+                        return {
+                            "filters": {
+                                "docstatus": 1,
+                            }
+                        }
+                    }
 				}
 			],
 			primary_action_label: __("Submit"),
