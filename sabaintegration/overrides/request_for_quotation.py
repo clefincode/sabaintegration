@@ -22,10 +22,15 @@ class CustomRequestforQuotation(RequestforQuotation):
         super(CustomRequestforQuotation, self).validate()
         if self.is_new():
             self.create_copied_option()
+            self.set_title()
         self.validate_bundle_items()
     
     def on_submit(self):
-        super(CustomRequestforQuotation, self).on_submit()
+        frappe.db.set(self, "status", "Submitted")
+        for supplier in self.suppliers:
+            supplier.email_sent = 0
+            supplier.quote_status = "Pending"
+        if self.get("send_rfq_email"): self.send_to_supplier()
         self.create_sq_automatically()
 
     def create_sq_automatically(self):
@@ -39,6 +44,17 @@ class CustomRequestforQuotation(RequestforQuotation):
     def on_cancel(self):
         super(CustomRequestforQuotation, self).on_cancel()
         self.delete_copied_option()
+        self.delete_draft_sq()
+        
+    def delete_draft_sq(self):
+        supplier_quotation = frappe.db.get_all(
+            "Supplier Quotation",
+            {"supplier":self.suppliers[0].supplier , "opportunity" : self.opportunity , "docstatus" : 'Draft'},
+            "name"
+        )      
+        if supplier_quotation:
+            frappe.get_doc('Supplier Quotation' , supplier_quotation[0].name).delete()
+            frappe.db.commit()                    
     
     def after_delete(self):
         if self.docstatus == 0:
@@ -113,9 +129,30 @@ class CustomRequestforQuotation(RequestforQuotation):
             copied_option.insert()
             frappe.db.commit()
 
-    def autoname(self):
+    # def autoname(self):
         ###If this rfq is coming from an opportunity option,
         ###then the name of rfq will include the opportunity name and option
+        # is_from_opp = False
+        # opportunityTitle = None
+        # option_number = None
+        # for item in self.get("items"):
+        #     if item.opportunity and item.opportunity_option_number: 
+        #         opportunityTitle = frappe.db.get_value("Opportunity", item.opportunity, "title") or item.opportunity
+        #         option_number = item.opportunity_option_number
+        #         is_from_opp = True
+        #         break
+        # if is_from_opp:
+        #     from frappe.model.naming import make_autoname
+
+        #     name = "{0}-Option{1}-".format(opportunityTitle, option_number)
+        #     self.name= make_autoname(name+".####", "", self)
+
+        # else:
+        #     from frappe.model.naming import set_name_by_naming_series, make_autoname
+
+        #     set_name_by_naming_series(self)
+        
+    def set_title(self):
         is_from_opp = False
         opportunityTitle = None
         option_number = None
@@ -126,15 +163,7 @@ class CustomRequestforQuotation(RequestforQuotation):
                 is_from_opp = True
                 break
         if is_from_opp:
-            from frappe.model.naming import make_autoname
-
-            name = "{0}-Option{1}-".format(opportunityTitle, option_number)
-            self.name= make_autoname(name+".####", "", self)
-
-        else:
-            from frappe.model.naming import set_name_by_naming_series, make_autoname
-
-            set_name_by_naming_series(self)
+            self.title = "{0}-Option{1}".format(opportunityTitle, option_number)
 
     @frappe.whitelist()
     def make_packing_list(self):
