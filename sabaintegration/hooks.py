@@ -38,7 +38,9 @@ doctype_js = {
 	"Opportunity" : "public/js/doctype/opportunity.js",
 	"Request for Quotation": "public/js/doctype/request_for_quotation.js",
 	"Supplier Quotation": "public/js/doctype/supplier_quotation.js",
-	"Quotation": "public/js/doctype/quotation.js"
+	"Quotation": "public/js/doctype/quotation.js",
+	"Item": "public/js/doctype/item.js",
+	"Product Bundle": "public/js/doctype/product_bundle.js"
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
