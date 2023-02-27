@@ -50,7 +50,7 @@ class CustomQuotation(Quotation):
 
 		if self.is_new():
 			self.set_title()
-	
+
 	def after_insert(self):
 		self.assign_quote()
 	
@@ -163,6 +163,12 @@ class CustomQuotation(Quotation):
 					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
 					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
 	
+	def on_trash(self):
+		remove_quote_from_copied_option(self.name)
+
+	def before_cancel(self):
+		remove_quote_from_copied_option(self.name)
+
 ###Custom Update the next methods are overrided from from erpnext packed_item.py
 def make_packing_list(doc):
 	"Make/Update packing list for Product Bundle Item."
@@ -293,11 +299,6 @@ def reset_packing_list(doc, from_option):
 		if reset_table: doc.set("packed_items", packeditems)
 	return reset_table
 
-def is_permitted_qty():
-	if 'Quotation change qty' in frappe.get_roles():
-		return True
-	return False
-
 def get_unsubmitted_sq(doc):
 	for item in doc.items:
 		if item.get("opportunity") and item.get("opportunity_option_number"):
@@ -314,6 +315,12 @@ def get_unsubmitted_sq(doc):
 				unsubmitted_sq.append(sq.parent)
 
 	return unsubmitted_sq
+
+def remove_quote_from_copied_option(quote):
+	docs = frappe.db.get_all("Copied Opportunity Option", {"quotation" : quote}, "name")
+	for doc in docs:
+		frappe.db.set_value("Copied Opportunity Option", doc.name, "quotation", "")
+		frappe.db.set_value("Copied Opportunity Option", doc.name, "in_quotation", 0)
 
 @frappe.whitelist()
 def check_permission_qty(user):
