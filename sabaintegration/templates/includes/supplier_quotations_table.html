@@ -13,11 +13,13 @@
                     {% if pair[0] is string %}
                     {{pair[0]}}
                     {% else %}
-                    <a href="\app\supplier-quotation\{{pair[0].supplier_quotation}}">{{pair[0].supplier_quotation}}</a>
+                    {% set title = frappe.db.get_value("Supplier Quotation", pair[0].supplier_quotation, 'title')%}
+                    <a href="\app\supplier-quotation\{{pair[0].supplier_quotation}}">{{pair[0].supplier_quotation}} ({{title}})</a>
                     {% endif %}
                 </td>
                 <td class="text-right">
-                    <a href="\app\supplier-quotation\{{pair[1]}}">{{pair[1]}}</a>
+                    {% set title = frappe.db.get_value("Supplier Quotation", pair[1], 'title')%}
+                    <a href="\app\supplier-quotation\{{pair[1]}}">{{pair[1]}} ({{title}})</a>
                 </td>
             </tr>
             {% endfor %}
