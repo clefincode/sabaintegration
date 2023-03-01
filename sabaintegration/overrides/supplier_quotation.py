@@ -261,6 +261,22 @@ def make_quotation(source_name, target_doc=None):
         )
         if taxes.get("taxes"):
             target.update(taxes)
+
+        set_party_details(source, target)
+
+    def set_party_details(source, target):
+        from erpnext.accounts.party import get_party_details
+
+        details = get_party_details(
+            party = target.party_name, 
+            party_type = target.quotation_to, 
+            price_list = target.selling_price_list,
+            posting_date = target.transaction_date,
+            company = target.company
+            )
+        for d in details.keys():
+            setattr(target, d, details[d])
+
     # If there is no request for quotation linked to this supplier quotation,
     # then map supplier quotation fields and items to quotation
     request_for_quotation = frappe.db.get_value("Supplier Quotation Item", {"parent" : source_name}, "request_for_quotation")
