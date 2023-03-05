@@ -44,8 +44,9 @@ class CustomSupplierQuotation(SupplierQuotation):
         opportunity, opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, ["opportunity", "opportunity_option_number"]) 
         if not opportunity or not opportunity_option_number: return
         
-        opportunityTitle = frappe.db.get_value("Opportunity", opportunity, "title")
-        self.title = "{0}-Option{1}".format(opportunityTitle, opportunity_option_number)
+        # opportunityTitle = frappe.db.get_value("Opportunity", opportunity, "title")
+        # self.title = "{0}-Option{1}".format(opportunityTitle, opportunity_option_number)
+        self.title = frappe.db.get_value("Request for Quotation", request_for_quotation, "title")
     
     def on_submit(self):
         super(CustomSupplierQuotation, self).on_submit()
@@ -391,11 +392,11 @@ def make_quotation(source_name, target_doc=None):
                                     qty = product_bundle_item.qty * opp_row.qty
                                     # rate = (item.base_rate + (item.base_rate * item.profit_margin / 100)) / conversion_rate
                                     # rate_before_margin = item.base_rate / conversion_rate
-                                    
                                     for pi in doclist.get("packed_items"):
                                         if (opp_row.item_code == pi.parent_item and opp_row.section_title == pi.section_title and\
                                         pi.item_code == item.item_code): 
-                                            if (pi.qty < qty):
+                                            precision = pi.precision("qty")
+                                            if (flt(pi.qty, precision) < flt(qty,precision)):
                                                 # #if the new rate is not equal the old one, then add a new row for this item
                                                 # if (pi.rate != rate or pi.rate_before_margin != rate_before_margin):
                                                 #     qty = (product_bundle_item.qty * opp_row.qty) - pi.qty 
@@ -404,7 +405,7 @@ def make_quotation(source_name, target_doc=None):
                                                 #         toupdate = True  
                                                 #else, update the qty only
                                                 #else:
-                                                pi.qty = qty
+                                                pi.qty = flt(qty,precision)
                                             break
                         # if there at least a new row for an existing packed item with different rate
                         # then recalcualate product bundle rates
@@ -437,8 +438,9 @@ def make_quotation(source_name, target_doc=None):
                         elif found and [row.item_code, opp_row.section_title] in quotation_items:
                             for item in doclist.get("items"):
                                 if item.item_code == row.item_code and opp_row.section_title == item.section_title:
-                                    if (item.qty < opp_row.qty):
-                                        item.qty = opp_row.qty
+                                    precision = item.precision("qty")
+                                    if (flt(item.qty, precision) < flt(opp_row.qty, precision)):
+                                        item.qty = flt(opp_row.qty, precision)
                                     # if (toupdate):
                                     #     item.rate = total_rate_with_margin
                                     #     item.rate_without_profit_margin = total_rate
@@ -475,7 +477,8 @@ def make_quotation(source_name, target_doc=None):
                                     # item.rate = rate_with_profit_margin
                                     # item.rate_without_profit_margin = rate_without_profit_margin
                                     # item.margin_from_supplier_quotation = profit_margin
-                                    item.qty += opp_row.qty - item.qty
+                                    precision = item.precision("qty")
+                                    item.qty += flt(opp_row.qty, precision) - flt(item.qty, precision)
                                     break
                     break
         add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
@@ -496,7 +499,8 @@ def make_quotation(source_name, target_doc=None):
 
 def add_packed_item(item, qty, opp_row, conversion_rate, doclist):
     packed_item = deepcopy(item)
-    packed_item.qty = qty
+    precision = item.precision("qty")
+    packed_item.qty = flt(qty, precision)
     rate = (item.base_rate + (item.base_rate * item.profit_margin / 100)) / conversion_rate # rate of the item is with respect to its margin
     rate_before_margin = item.base_rate / conversion_rate
     fields = {
@@ -527,9 +531,10 @@ def set_rates(source_name, target_name):
     itemslist = deepcopy(target_doc.items)
     conversion_rate = get_exchange_rate(source_doc.currency, target_doc.currency)
     
-    for item in itemslist:
+    for item in itemslist:        
         for source_item in source_doc.items:
-            if item.item_code == source_item.item_code:
+            if item.item_code == source_item.item_code and item.rate != source_item.rate:
+                # print(f"\033[91m {item.item_code}")
                 item.profit_margin = source_item.profit_margin
                 item.rate = source_item.rate / conversion_rate
                 item.amount = item.rate * item.qty if item.qty > 0 else 0
@@ -541,5 +546,9 @@ def set_rates(source_name, target_name):
                 item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
                 item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
                 item.discount_amount = flt(item.rate - item.price_list_rate)
+            # elif item.item_code == source_item.item_code and item.rate == source_item.rate:
+            #     print(f"\033[93m {item.item_code}")
+            #     item.price_updated = "test"              
+                
     return itemslist
 
