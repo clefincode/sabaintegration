@@ -4,7 +4,7 @@
 import copy
 import frappe
 from frappe import _
-
+from frappe.utils import flt
 from erpnext.selling.doctype.quotation.quotation import Quotation
 
 class CustomQuotation(Quotation):
@@ -133,6 +133,7 @@ class CustomQuotation(Quotation):
 			else: option_items = frappe.db.get_all("Opportunity Item", {"parent": opportunity_name}, ["item_code", "qty"])
 			
 			itemslist = copy.deepcopy(self.items)
+			precision = self.items[0].precision("qty")
 			# iterate through items in the option to check if each item has been added to quotation
 			for option_item in option_items:
 				found = False
@@ -142,7 +143,7 @@ class CustomQuotation(Quotation):
 						# if item is present with the same quantity and section title, then check its bundles
 						if option_item.item_code == item.item_code and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
 							
-							if option_item.qty != item.qty and not check_permission_qty(frappe.session.user):
+							if flt(option_item.qty, precision) != flt(item.qty, precision) and not check_permission_qty(frappe.session.user):
 								frappe.throw("Qty of item <b>{}</b> is not correct as in option".format(item.item_code))
 							
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
@@ -231,7 +232,8 @@ def check_bundle_items(parent_item, packed_table):
 		found = False
 		for packed_item in packed_table:
 			if packed_item.item_code == bundle_item.item_code and parent_item.item_code == packed_item.parent_item and parent_item.section_title == packed_item.section_title:
-				if packed_item.qty >= bundle_item.qty * parent_item.qty:
+				precision = packed_item.precision("qty")
+				if flt(packed_item.qty, precision) >= flt(bundle_item.qty * parent_item.qty, precision):
 					found = True
 					break
 				#else: return False

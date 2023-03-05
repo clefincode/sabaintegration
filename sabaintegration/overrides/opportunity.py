@@ -4,7 +4,7 @@ from six import string_types
 import frappe
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 from erpnext.crm.doctype.opportunity.opportunity import Opportunity
@@ -263,15 +263,19 @@ def make_request_for_quotation(source_name, target_doc=None):
         """.format(source_name, op_num), as_dict = 1)
         opportunity = frappe.get_doc("Opportunity", source_name)
         bundles = opportunity.group_similar_bundle_items()
+        if req_packed_items:
+            pis = frappe.get_doc("Request for Quotation", req_packed_items[0].parent).get("packed_items")
+            precision = pis[0].precision("qty") if pis else 0
+
         for bundle in bundles:
             found = False
             existsitems = []
             qtys = {}
             for packed_item in req_packed_items:
-                if packed_item.item_code == bundle.get("item_code") and packed_item.qty == bundle.get("qty"):
+                if packed_item.item_code == bundle.get("item_code") and flt(packed_item.qty, precision) >= flt(bundle.get("qty"), precision):
                     found = True
                     break
-                elif packed_item.item_code == bundle.get("item_code") and packed_item.qty < bundle.get("qty"):
+                elif packed_item.item_code == bundle.get("item_code") and flt(packed_item.qty, precision) < flt(bundle.get("qty"), precision):
                     bundle["qty"] -= packed_item.qty                    
                     if bundle.get("qty") == 0:
                         found = True
