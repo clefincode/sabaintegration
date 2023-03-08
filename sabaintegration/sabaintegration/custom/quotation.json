@@ -844,7 +844,7 @@
    "label": "Opportunity Owner",
    "length": 0,
    "mandatory_depends_on": null,
-   "modified": "2023-03-05 15:50:07.683512",
+   "modified": "2023-03-08 11:00:00.683512",
    "modified_by": "Administrator",
    "name": "Quotation-opportunity_owner",
    "no_copy": 0,
