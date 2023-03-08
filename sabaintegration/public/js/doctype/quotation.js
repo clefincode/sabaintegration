@@ -5,7 +5,7 @@
 {% include 'sabaintegration/selling/sales_common.js' %}
 
 frappe.ui.form.on('Quotation', {
-	setup: function(frm){
+	onload: function(frm){
 		if (frm.doc.option_number_from_opportunity > 0 ){
 			frm.toggle_display('option_number_from_opportunity', true)
 		}
@@ -22,6 +22,10 @@ frappe.ui.form.on('Quotation', {
 		});
 		frm.doc.total_rate_without_margin = total;
 		frm.refresh_field("total_rate_without_margin");
+	},
+	items_on_form_rendered: function(){
+		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
+			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
 	}
 });
 
@@ -191,12 +195,10 @@ erpnext.selling.QuotationController = erpnext.selling.SellingController.extend({
 	total_margin: async function(){
 		var me = this;
 		if (me.frm.doc.items){
-			let difference = me.frm.doc.total_rate_without_margin * me.frm.doc.total_margin / 100;
-			let ratetoadd = flt(difference / me.frm.doc.total_qty, precision("ratetoadd"));
 			let total = 0;
 			await $.each(me.frm.doc.items || [], function(i, d) {
-				d.rate = d.rate_without_profit_margin + ratetoadd;
-				d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
+				d.margin_from_supplier_quotation = me.frm.doc.total_margin;
+				d.rate = d.rate_without_profit_margin + (d.rate_without_profit_margin * d.margin_from_supplier_quotation  / 100)
 				d.amount = d.rate * d.qty;
 				total += d.amount;
 			});
@@ -205,12 +207,13 @@ erpnext.selling.QuotationController = erpnext.selling.SellingController.extend({
 		}
 	},
 	calculate_total_margin: function(){
+		let me = this;
 		let total = 0
 		$.each(this.frm.doc.items || [], function(i, d) {
-			console.log(d.rate)
 			total = total  + (d.rate * d.qty);
 		});
 		this.frm.doc.total_margin = (total - this.frm.doc.total_rate_without_margin) / this.frm.doc.total_rate_without_margin * 100;
+		me.frm.refresh_field("total_margin");
 	}
 });
 
@@ -238,34 +241,58 @@ frappe.ui.form.on('Quotation Item', {
 	qty: function(frm, cdt, cdn){
 		frm.trigger("set_total_without_margin");
 		if (frm.doc.supplier_quotations || frm.doc.opportunity){
-			if (frm.doc.packed_items ){
-				if (check_permission(frm) == false) return;
-				frappe.dom.freeze();
-				setTimeout(async () => {
-					var d = locals[cdt][cdn];
-					let packed_items = await get_packed_items(frm, d);
-					if (packed_items) update_packed_items_qty(frm, packed_items, d)
-					frappe.dom.unfreeze();
-				}, 2000)
-			}
+			var d = locals[cdt][cdn];
+			check_change_qty(frm, d)
 		}
 
+	},
+	rate_without_profit_margin: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		var margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
+		frappe.model.set_value(cdt, cdn, "margin_from_supplier_quotation", margin_from_supplier_quotation)
+		frm.trigger("set_total_without_margin");
+		frm.script_manager.trigger("calculate_total_margin");
 	}
 	
 
 })
-const check_permission = function(frm){
+const check_change_qty = async function(frm, d){
 	frappe.call({
 		method: "sabaintegration.overrides.quotation.check_permission_qty",
 		args: {
 			"user": frappe.session.user
 		},
 		freeze: true,
-		callback: function(r){
+		callback: async function(r){
 			if (r.message == false){
 				frm.reload_doc()
 				frappe.throw("You don't have enough permission to edit qty of items that coming from opportunity")
-				return false;
+				return;
+			}
+			else {
+				frappe.dom.freeze();
+				let warn = await check_qty(frm, d);
+				if (warn.message == false){
+					await frappe.confirm("The quantity in opportunity of this item is not the same as you've provided. Are you sure of changing the qty", 
+					() => {
+						setTimeout(async () => {
+							let packed_items = await get_packed_items(frm, d);
+							if (packed_items) update_packed_items_qty(frm, packed_items, d)					
+							frappe.dom.unfreeze();
+						}, 2000)
+					},
+					() => {
+						frappe.dom.unfreeze();
+						frm.reload_doc()
+					})
+				}
+				else {
+					setTimeout(async () => {
+						let packed_items = await get_packed_items(frm, d);
+						if (packed_items) update_packed_items_qty(frm, packed_items, d)					
+						frappe.dom.unfreeze();
+					}, 2000)
+				}
 			}
 		}
 	})
@@ -299,5 +326,35 @@ const update_packed_items_qty = async (frm, packed_items, row) => {
 		}
 	}
 	frm.refresh_field("packed_items")
+	
+}
+
+const check_qty = async function(frm, row){
+	if (!frm.doc.opportunity) return true;
+
+	if (!frm.doc.option_number_from_opportunity){
+		for (let item of frm.doc.items){
+			if (item.opportunity_option_number > 0) {
+				frm.doc.option_number_from_opportunity = item.opportunity_option_number
+				break
+			}
+		}
+	}
+	if (!frm.doc.option_number_from_opportunity) return true;
+	return await frappe.call({
+		method: "sabaintegration.overrides.quotation.check_qty",
+		args: {
+			"opportunity": frm.doc.opportunity,
+			"option_number": frm.doc.option_number_from_opportunity,
+			"item_code": row.item_code,
+			"qty":row.qty,
+			"section_title": row.section_title
+		},
+		callback: function(r){
+			if (r.message) return r.message;
+			else return true
+		}
+	})
+	
 	
 }

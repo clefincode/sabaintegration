@@ -329,3 +329,18 @@ def check_permission_qty(user):
 	if "0 Selling - Quotation edit qty" in frappe.get_roles():
 		return True
 	return False
+
+@frappe.whitelist()
+def check_qty(opportunity, option_number, item_code, qty, section_title = None):
+	strquery = """
+		select qty from `tabOpportunity Option`
+		where parent = '{0}' and parentfield = 'option_{1}' and item_code = '{2}' 
+	""".format(opportunity, option_number, item_code)
+
+	if (section_title == None):
+		strquery += "and section_title is null"
+	else: 
+		strquery += "and section_title = '{}'".format(section_title)
+
+	option_qty = frappe.db.sql(strquery, as_list = 1)
+	return flt(option_qty[0][0]) == flt(qty)
