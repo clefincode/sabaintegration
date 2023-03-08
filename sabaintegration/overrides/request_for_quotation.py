@@ -165,6 +165,23 @@ class CustomRequestforQuotation(RequestforQuotation):
         if is_from_opp:
             self.title = "{0}-Option{1}".format(opportunityTitle, option_number)
 
+    def send_to_supplier(self):
+        """Sends RFQ mail to involved suppliers."""
+        if not self.get("send_rfq_email"): return
+        for rfq_supplier in self.suppliers:
+            if rfq_supplier.email_id is not None and rfq_supplier.send_email:
+                self.validate_email_id(rfq_supplier)
+
+                # make new user if required
+                update_password_link, contact = self.update_supplier_contact(rfq_supplier, self.get_link())
+
+                self.update_supplier_part_no(rfq_supplier.supplier)
+                self.supplier_rfq_mail(rfq_supplier, update_password_link, self.get_link())
+                rfq_supplier.email_sent = 1
+                if not rfq_supplier.contact:
+                    rfq_supplier.contact = contact
+                rfq_supplier.save()
+
     @frappe.whitelist()
     def make_packing_list(self):
         from copy import deepcopy
