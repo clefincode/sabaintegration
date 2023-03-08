@@ -253,6 +253,7 @@ def make_quotation(source_name, target_doc=None):
         target.quotation_to = frappe.db.get_value("Opportunity", opportunity, "opportunity_from")
         target.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
         target.opportunity = opportunity
+        target.opportunity_owner = frappe.db.get_value("Opportunity", opportunity, "opportunity_owner")
 
         target.currency = get_party_account_currency(target.quotation_to, target.party_name, target.company) or get_company_currency(target.company)
 
@@ -309,6 +310,26 @@ def make_quotation(source_name, target_doc=None):
         # if there is quotation linked to the opportunity, 
         # open the quotation to add the supplier quotatiuon items to it
         opportunity, opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, ["opportunity", "opportunity_option_number"])
+        if not opportunity:
+            return get_mapped_doc(
+            "Supplier Quotation",
+            source_name,
+            {
+                "Supplier Quotation": {
+                    "doctype": "Quotation",
+                },
+                "Supplier Quotation Item": {
+                    "doctype": "Quotation Item",
+                    "condition": lambda doc: frappe.db.get_value("Item", doc.item_code, "is_sales_item") == 1,
+                    "add_if_empty": True,
+                    "field_map": {
+                        "name": "supplier_quotation_item",
+                        #"request_for_quotation": request_for_quotation
+                    },
+                },
+            },
+            target_doc,
+            )
         quotation = frappe.db.get_value("Quotation Item", {
             "opportunity": opportunity,
             "opportunity_option_number": opportunity_option_number,
@@ -428,6 +449,7 @@ def make_quotation(source_name, target_doc=None):
                                 "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100,
                                 "opportunity_option_number": row.opportunity_option_number,
                                 "opportunity": row.opportunity,
+                                #"request_for_quotation": request_for_quotation,
                                 "section_title": opp_row.section_title
                             }
                             if total_rate_with_margin == 0:
@@ -465,6 +487,7 @@ def make_quotation(source_name, target_doc=None):
                                 "margin_from_supplier_quotation": profit_margin,
                                 "opportunity_option_number": row.opportunity_option_number,
                                 "opportunity": row.opportunity,
+                                #"request_for_quotation": request_for_quotation,
                                 "section_title": opp_row.section_title,
                                 "supplier_quotation_item": name
                             }
@@ -529,26 +552,52 @@ def set_rates(source_name, target_name):
     source_doc = frappe.get_doc("Supplier Quotation", source_name)
     target_doc = frappe.get_doc("Supplier Quotation", target_name)
     itemslist = deepcopy(target_doc.items)
-    conversion_rate = get_exchange_rate(source_doc.currency, target_doc.currency)
+    conversion_rate = get_exchange_rate(source_doc.currency, target_doc.currency)    
+    items = []
+    not_updated_items = []
     
-    for item in itemslist:        
+    for item in itemslist:
+        item_code_exists = False
+        item_exists = False        
         for source_item in source_doc.items:
-            if item.item_code == source_item.item_code and item.rate != source_item.rate:
-                # print(f"\033[91m {item.item_code}")
-                item.profit_margin = source_item.profit_margin
-                item.rate = source_item.rate / conversion_rate
-                item.amount = item.rate * item.qty if item.qty > 0 else 0
-                item.base_rate = source_item.get("base_rate")
-                item.net_rate = source_item.get("net_rate") / conversion_rate
-                item.base_net_rate = source_item.get("base_net_rate")
-                item.base_amount = item.get("base_rate") * item.qty if item.qty > 0 else 0
-                item.net_amount = item.get("net_rate") * item.qty if item.qty > 0 else 0
-                item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
-                item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
-                item.discount_amount = flt(item.rate - item.price_list_rate)
-            # elif item.item_code == source_item.item_code and item.rate == source_item.rate:
-            #     print(f"\033[93m {item.item_code}")
-            #     item.price_updated = "test"              
+            if item.item_code == source_item.item_code:
+                item_code_exists = True
+                if item.rate != source_item.rate:
+                    item_exists = True
+                    item.profit_margin = source_item.profit_margin
+                    item.rate = source_item.rate / conversion_rate
+                    item.amount = item.rate * item.qty if item.qty > 0 else 0
+                    item.base_rate = source_item.get("base_rate")
+                    item.net_rate = source_item.get("net_rate") / conversion_rate
+                    item.base_net_rate = source_item.get("base_net_rate")
+                    item.base_amount = item.get("base_rate") * item.qty if item.qty > 0 else 0
+                    item.net_amount = item.get("net_rate") * item.qty if item.qty > 0 else 0
+                    item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
+                    item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
+                    item.discount_amount = flt(item.rate - item.price_list_rate)
+                break
+        if (item_code_exists and not item_exists) or not item_code_exists:
+            itemslist.remove(item)
+            not_updated_items.append(item)                                           
+   
+    items.append({"updated_items" : itemslist})
+    items.append({"not_updated_items" : not_updated_items})
                 
-    return itemslist
+    return items
+
+@frappe.whitelist()
+def get_supplier_quotations(doctype, txt, searchfield, start, page_len, filters):
+    return frappe.db.sql(
+        f"""SELECT name , opportunity
+            FROM `tabSupplier Quotation` 
+            WHERE docstatus = 1 AND opportunity is not null AND opportunity = '{filters.get("opportunity")}'
+            group by name , opportunity
+
+            UNION 
+
+            SELECT name , opportunity
+            FROM `tabSupplier Quotation` 
+            WHERE docstatus = 1 AND opportunity is not null
+            group by name , opportunity            
+            """)
 

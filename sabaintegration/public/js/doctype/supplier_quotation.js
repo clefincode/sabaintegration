@@ -97,9 +97,11 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 					"options": 'Supplier Quotation',
 					"reqd": 1,
                     get_query: function(){
+                        var opportunity = me.frm.doc.opportunity;
                         return {
-                            "filters": {
-                                "docstatus": 1,
+                            query:"sabaintegration.overrides.supplier_quotation.get_supplier_quotations",
+                            filters: {
+                                opportunity : opportunity
                             }
                         }
                     }
@@ -118,18 +120,32 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 					},
 					freeze: true,
 					callback: function(r) {
-						if(r.message) {
-							me.frm.clear_table("items");
+						if(r.message) {                            
+							me.frm.clear_table("items");                            
                             me.frm.refresh_field("items");
-                            r.message.forEach((row) => {
+                            r.message[0].updated_items.forEach((row) => {                                
 								let item = me.frm.add_child("items");
+                               
+								//$.extend(item, row);
+                                for (const field in row){                                    
+                                    if (field != 'name')
+                                    item[field] = row[field];
+                                }
+                                me.frm.refresh_field("items");
+                                me.frm.page.body.find(`[data-fieldname="items"] [data-idx="${row.idx}"] .data-row`).addClass("highlight");                                
+							});
+
+                            r.message[1].not_updated_items.forEach((row) => {
+								let item = me.frm.add_child("items");                                
 								//$.extend(item, row);
                                 for (const field in row){
                                     if (field != 'name')
                                     item[field] = row[field];
-                                }
+                                }                                
 							});
-							me.frm.refresh_field("items");
+							me.frm.refresh_field("items"); 
+                                                       
+                            
 						}
 					}
 				});
