@@ -240,7 +240,7 @@ frappe.ui.form.on('Quotation Item', {
 	},
 	qty: function(frm, cdt, cdn){
 		frm.trigger("set_total_without_margin");
-		if (frm.doc.supplier_quotations || frm.doc.opportunity){
+		if (frm.doc.supplier_quotations){
 			var d = locals[cdt][cdn];
 			check_change_qty(frm, d)
 		}
