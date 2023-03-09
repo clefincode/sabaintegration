@@ -590,14 +590,14 @@ def get_supplier_quotations(doctype, txt, searchfield, start, page_len, filters)
     return frappe.db.sql(
         f"""SELECT name , opportunity
             FROM `tabSupplier Quotation` 
-            WHERE docstatus = 1 AND opportunity is not null AND opportunity = '{filters.get("opportunity")}'
+            WHERE docstatus = 1 AND opportunity is not null AND opportunity = '{filters.get("opportunity")}' AND name like '%{txt}%'
             group by name , opportunity
 
             UNION 
 
             SELECT name , opportunity
             FROM `tabSupplier Quotation` 
-            WHERE docstatus = 1 AND opportunity is not null
+            WHERE docstatus = 1 AND opportunity is not null AND name like '%{txt}%'
             group by name , opportunity            
             """)
 
