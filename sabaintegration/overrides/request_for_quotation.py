@@ -3,6 +3,7 @@
 
 
 import json
+from copy import deepcopy
 
 import frappe
 from frappe import _
@@ -206,21 +207,40 @@ def delete_by_brand(items, packed_items, brands):
     if len(items) > 0:
         itemslist = []
         items = json.loads(items)
-        i = 1
+        #i = 1
         for item in items:
             # found = False
             if not frappe.db.exists("Product Bundle", {"new_item_code": item["item_code"]}):
                 for brand in brands:
                     if (item["brand"] == brand["brand"]):
                         # found = True
-                        item["idx"] = i
-                        itemslist.append(item)
-                        i += 1
+                        newitem = deepcopy(item)
+                        fields = {
+                            "stock_uom": newitem.get("uom") or newitem.get("stock_uom") or frappe.db.get_value("Item", newitem.get("item_code"), "stock_uom"),
+                            "conversion_factor": 1.00,
+                            "image": newitem.get("image") or frappe.db.get_value("Item", newitem.get("item_code"), "image"),
+                            "opportunity": newitem.get("opportunity"),
+                            "opportunity_option_number": newitem.get("opportunity_option_number"),
+                            "opportunity_item": newitem.get("opportunity_item")
+                        }
+                        add_item_to_table(newitem, itemslist, doc = None, other_fields= fields)
+                        #itemslist.append(item)
+                        #i += 1
                         break
             else: 
-                item["idx"] = i
-                itemslist.append(item)
-                i += 1
+                #item["idx"] = i
+                newitem = deepcopy(item)
+                fields = {
+                    "stock_uom": newitem.get("uom") or newitem.get("stock_uom") or frappe.db.get_value("Item", newitem.get("item_code"), "stock_uom"),
+                    "conversion_factor": 1.00,
+                    "image": newitem.get("image") or frappe.db.get_value("Item", newitem.get("item_code"), "image"),
+                    "opportunity": newitem.get("opportunity"),
+                    "opportunity_option_number": newitem.get("opportunity_option_number"),
+                    "opportunity_item": newitem.get("opportunity_item")
+                }
+                add_item_to_table(newitem, itemslist, doc = None, other_fields= fields)
+                #itemslist.append(item)
+                #i += 1
             # if not found:
             #     item["idx"] = item["idx"] - i
             #     itemslist.append(item)
@@ -230,15 +250,17 @@ def delete_by_brand(items, packed_items, brands):
     if len(packed_items) > 0:
         itemslist = []
         packed_items = json.loads(packed_items)
-        i = 1
+        #i = 1
         for item in packed_items:
             # found = False
             for brand in brands:
                 if (item["brand"] == brand["brand"]):
                     # found = True
-                    item["idx"] = i
-                    itemslist.append(item)
-                    i += 1
+                    #item["idx"] = i
+                    newitem = deepcopy(item)
+                    add_item_to_table(newitem, itemslist)
+                    #itemslist.append(item)
+                    #i += 1
                     break
             # if not found:
             #     item["idx"] = item["idx"] - i
@@ -250,12 +272,15 @@ def delete_by_brand(items, packed_items, brands):
 
 @frappe.whitelist()
 def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=None):
+    from frappe.utils import now, today, add_months
     if not frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": source_name, "docstatus": ("!=", 2)}):
         doclist = first_supplier_quotation(source_name, target_doc, for_supplier)
         
     else:
         doclist = not_first_supplier_quotation(source_name, target_doc, for_supplier)
-
+    
+    doclist.transaction_date = now()
+    doclist.valid_till = add_months(today(), 1)
     return doclist
 
 def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):

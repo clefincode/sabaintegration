@@ -434,3 +434,23 @@ def validate_item_code(doctype):
 			frappe.db.set_value(doctype, {"item_name": item.item_name, "name": item.name}, "item_code", itemdoc.item_code)
 	#frappe.db.commit()
 
+@frappe.whitelist()
+def get_clients(project):
+	strquery = """
+	select distinct role.parent 
+	from `tabHas Role` as role,
+	`tabUser Permission` as perm
+	where role.parenttype = 'User' and role.role = 'Client'
+	and perm.user = role.parent and allow = 'Project' and for_value = '{0}'
+	""".format(project)
+	res = frappe.db.sql(strquery, as_list = 1)
+	users = []
+	for r in res:
+		for i in r:
+			users.append(i)
+	return users
+
+@frappe.whitelist()
+def send_updates():
+	from frappe.desk.form.document_follow import send_hourly_updates
+	send_hourly_updates()

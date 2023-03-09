@@ -6,11 +6,7 @@ frappe.ui.form.on("Opportunity", {
 
         frm.set_df_property('items', 'cannot_add_rows', true);
 		frm.set_df_property('items', 'cannot_delete_rows', true);
-
-        if (!frm.doc.parent_items || frm.doc.parent_items.length < 1) frm.toggle_display('parent_items', false);
-        if (!frm.is_new()) frm.doc.selected_option = 0
-        else if (frm.doc.with_items) frm.trigger("set_option")
-        
+       
         // show download button under items and packed items tables
         frm.get_docfield("items").allow_bulk_edit = 1;
         frm.fields_dict.items.grid.wrapper.find('.grid-download').removeClass('hidden');
@@ -37,7 +33,6 @@ frappe.ui.form.on("Opportunity", {
         // testing submit button
         frm.trigger("scheck_option_status")
         frm.trigger("check_empty_option")
-        
     // testing submit button end
     },
     condition(frm) {
@@ -106,11 +101,6 @@ frappe.ui.form.on("Opportunity", {
         }
     },
     refresh(frm) {
-        frm.set_df_property('parent_items', 'cannot_add_rows', true);
-		frm.set_df_property('parent_items', 'cannot_delete_rows', true);
-
-        frm.set_df_property('items', 'cannot_add_rows', true);
-		frm.set_df_property('items', 'cannot_delete_rows', true);
         // Custom Update
         frm.add_custom_button(__('Request For Quotation New Tab'),
             function() {
@@ -121,8 +111,7 @@ frappe.ui.form.on("Opportunity", {
         if (!frm.doc.parent_items || frm.doc.parent_items.length < 1) frm.toggle_display('parent_items', false);
         
         if (frm.is_new()) frm.doc.selected_option = 0; 
-        else if (frm.doc.with_items) frm.trigger("set_option")
-        
+        else if (frm.doc.items) frm.trigger("set_option")
         
         //  submit button show
         frm.trigger("check_empty_option")
@@ -157,25 +146,14 @@ frappe.ui.form.on("Opportunity", {
         };
     },
     set_option_items: async function(frm, option_number){
-        let myPromise = new Promise((resolve, reject) => {
-            if (frm.doc.with_items != 1){
-                frappe.confirm(__("<b>With Items</b> field is not checked. Do you want to check it?"), function() {
-                    frm.doc.with_items = 1;
-                    frm.refresh_field("with_items");
-                    resolve();
-                })
-            }
-            else resolve();
-        })
-        myPromise.then(() => {
-            frm.doc.items=[];
+        frm.doc.items=[];
             new Promise((resolve)=> {
                 group_similar_items(frm,frm.fields_dict["option_"+option_number.toString()].grid.data , resolve)
             }).then(()=>{
                     refresh_field("items");
                     validate_product_bundle(frm);
+                    frm.trigger("calculate_total");
             })
-        })
     },
 
     make_request_for_quotation: function(frm) { 
@@ -203,10 +181,10 @@ frappe.ui.form.on("Opportunity", {
         theDoc.body.appendChild(theScript);
 
 	},
-    with_items: function(frm){
-        if (cur_frm.doc.with_items == 1)
-            frm.trigger("set_option")
-    },
+    // with_items: function(frm){
+    //     if (cur_frm.doc.with_items == 1)
+    //         frm.trigger("set_option")
+    // },
     check_empty_option: function(frm){
         for (let i=0; i<frm.all_options.length - 1; i++){
             if (frm.fields_dict[frm.all_options[i]].grid.data && frm.fields_dict[frm.all_options[i]].grid.data.length != 0 ) frm.set_df_property(frm.all_options[i+1], 'hidden', 0);
@@ -239,13 +217,12 @@ frappe.ui.form.on("Opportunity", {
     },
     set_option_html: function(option){
         if (document.getElementById('option_number')) {
-            document.getElementById('option_number').remove();
+            $('#option_number').remove();
         }
-
         if (option != 0){
             var x = document.querySelectorAll(".section-head");
             for (var i = 0; i < x.length; i++) {
-                if(x[i].innerHTML.indexOf("Selected Option Preview") !== -1 && x[i].innerHTML.indexOf("Bundle Items") == -1) {
+                if(x[i].innerHTML.indexOf("Technical Options") !== -1 && x[i].innerHTML.indexOf("Bundle Items") == -1) {
                     x[i].innerHTML+= "<small id='option_number'  style='padding: 3px 10px; font-weight: 500;background:#fff5f5; margin:10px; color:#e24c4c;'>Option "+option+"</small>";
                 }
             }
@@ -372,10 +349,25 @@ frappe.ui.form.on("Opportunity", {
 frappe.ui.form.on('Opportunity Option', { 
     item_code: function(frm,cdt,cdn){
         var d = locals[cdt][cdn]
+        frappe.model.set_value(cdt, cdn, "rate", 0)
+        frm.trigger("calculate_option", cdt, cdn);
         if (d.parentfield.charAt(d.parentfield.length - 1) == "0")
             frappe.model.set_value(cdt, cdn, "option_number", 10)
         else frappe.model.set_value(cdt, cdn, "option_number", parseInt(d.parentfield.charAt(d.parentfield.length - 1)))
+
     },
+    calculate_option: function(frm, cdt, cdn) {
+		let row = frappe.get_doc(cdt, cdn);
+		frappe.model.set_value(cdt, cdn, "amount", flt(row.qty) * flt(row.rate));
+		frappe.model.set_value(cdt, cdn, "base_rate", flt(frm.doc.conversion_rate) * flt(row.rate));
+		frappe.model.set_value(cdt, cdn, "base_amount", flt(frm.doc.conversion_rate) * flt(row.amount));
+	},
+    rate: function(frm, cdt, cdn){
+        frm.trigger("calculate_option", cdt, cdn);
+    },
+    qty: function(frm, cdt, cdn) {
+		frm.trigger("calculate", cdt, cdn);
+	},
     option_1_add(frm, cdt, cdn) { 
         var child1 = locals[cdt][cdn];
         child1.qty = 1;
@@ -485,7 +477,7 @@ frappe.ui.form.on('Opportunity Option', {
 const validate_product_bundle = async (frm) => {
     frappe.dom.freeze()
 
-    if (!frm.doc.with_items) return;
+    if (!frm.doc.items) return;
   
     // let's empty the table first
     frm.doc.parent_items = [];

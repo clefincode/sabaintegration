@@ -1,29 +1,26 @@
 // Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 // License: GNU General Public License v3. See license.txt
 
-erpnext.selling.CustomSellingController = erpnext.selling.SellingController.extend({
-	customer: function() {
-		var me = this;
-		erpnext.utils.get_party_details(this.frm, null, null, function() {
-			me.apply_price_list();
-		});
-	},
+cur_frm.cscript.tax_table = "Sales Taxes and Charges";
+{% include 'erpnext/selling/sales_common.js' %}
 
-	sales_partner: function() {
+
+cur_frm.email_field = "contact_email";
+
+frappe.provide("erpnext.selling");
+erpnext.selling.CustomSellingController = class CustomSellingController extends erpnext.selling.SellingController{ 
+
+	campaign() {
 		this.apply_pricing_rule();
-	},
+	}
 
-	campaign: function() {
-		this.apply_pricing_rule();
-	},
-
-	selling_price_list: function() {
+	selling_price_list() {
 		this.apply_price_list();
 		this.set_dynamic_labels();
-	},
+	}
 
 	///Custom Update this method is from erpnext transaction.js
-	apply_price_list: function(item, reset_plc_conversion) {
+	apply_price_list(item, reset_plc_conversion) {
 		// We need to reset plc_conversion_rate sometimes because the call to
 		// `erpnext.stock.get_item_details.apply_price_list` is sensitive to its value
 		if (!reset_plc_conversion) {
@@ -61,8 +58,8 @@ erpnext.selling.CustomSellingController = erpnext.selling.SellingController.exte
 		}).always(() => {
 			me.in_apply_price_list = false;
 		});
-	},
-	_set_values_for_item_list: function(children) {
+	}
+	_set_values_for_item_list(children) {
 		var me = this;
 		var items_rule_dict = {};
 
@@ -114,5 +111,5 @@ erpnext.selling.CustomSellingController = erpnext.selling.SellingController.exte
 		me.calculate_taxes_and_totals();
 
 	}
-});
+}
 

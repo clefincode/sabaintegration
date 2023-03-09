@@ -5,13 +5,6 @@ frappe.ui.form.on("Request for Quotation",{
 		frm.custom_make_buttons = {
 			'Supplier Quotation From Opportunity': 'Create'
 		}
-		frm.fields_dict["suppliers"].grid.get_field("contact").get_query = function(doc, cdt, cdn) {
-			let d = locals[cdt][cdn];
-			return {
-				query: "erpnext.buying.doctype.request_for_quotation.request_for_quotation.get_supplier_contacts",
-				filters: {'supplier': d.supplier}
-			}
-		}
 		frm.set_df_property('packed_items', 'cannot_add_rows', true);
 		//frm.set_df_property('packed_items', 'cannot_delete_rows', true);
 		if (!frm.doc.packed_items || frm.doc.packed_items.length < 1) frm.toggle_display('packed_items', false);
@@ -107,12 +100,23 @@ frappe.ui.form.on("Request for Quotation",{
 					if(r.message) {
 						if (r.message.items)
 						{
-							frm.doc.items = r.message.items;
+							frm.clear_table("items");
+							frm.refresh_field("items");
+							r.message.items.forEach((row) => {
+								let item = frm.add_child("items");
+								$.extend(item, row);
+								item.warehouse = item.warehouse || '';
+							});
 							frm.refresh_field("items");
 						}
 						if (r.message.packed_items)
 						{
-							frm.doc.packed_items = r.message.packed_items;
+							frm.clear_table("packed_items");
+							r.message.packed_items.forEach((row) => {
+								let item = frm.add_child("packed_items");
+								$.extend(item, row);
+								item['warehouse'] = item['warehouse'] || '';
+							});
 							frm.refresh_field("packed_items");
 						}
 						frm.dirty();
@@ -287,7 +291,10 @@ const update_product_bundle = async (frm, row, method) => {
 	}
 	else if (method == "qty"){
 		const packed_items = await get_packed_items(row);
-		if (!packed_items) return;
+		if (!packed_items) {
+			frappe.dom.unfreeze();
+			return;
+		}
 
 		for (const packed_item of packed_items.items){
 			for (let pitem of cur_frm.doc.packed_items){

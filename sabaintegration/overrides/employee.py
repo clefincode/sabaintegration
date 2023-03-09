@@ -3,7 +3,7 @@
 import frappe
 from frappe import _
 
-from erpnext.hr.doctype.employee.employee import Employee
+from erpnext.setup.doctype.employee.employee import Employee
 
 class CustomEmployee(Employee):
 	def validate(self):

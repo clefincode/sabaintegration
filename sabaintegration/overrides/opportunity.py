@@ -4,7 +4,7 @@ from six import string_types
 import frappe
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
 from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
 from erpnext.crm.doctype.opportunity.opportunity import Opportunity
@@ -40,8 +40,6 @@ class CustomOpportunity(Opportunity):
             })
         return bundles
 
-    def before_save(self):
-        self.update_items_table()
 
     def update_items_table(self):
         if (self.selected_option):
@@ -78,21 +76,24 @@ class CustomOpportunity(Opportunity):
                 opt_after_save = self.option_10
 
             if opt_after_save and opt_before_save:
-                items_before_save = [{"item_code": item.item_code, "qty": item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_before_save]
-                items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_after_save]
+                items_before_save = [{"item_code": item.item_code, "qty": item.qty, "warehouse": item.warehouse, "option_number": item.option_number, "rate": item.rate, "base_rate": item.base_rate, "base_amount": item.base_amount, "amount": item.amount} for item in opt_before_save]
+                items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse, "option_number": item.option_number, "rate": item.rate, "base_rate": item.base_rate, "base_amount": item.base_amount, "amount": item.amount} for item in opt_after_save]
 
                 if items_before_save != items_after_save:
                     self.update({"items": group_similar_items(items_after_save, self.company)})
                     if self.items: self.update_packed_table()
+                    self.calculate_total()
 
             elif opt_before_save and not opt_after_save:
                 self.items = []
                 self.parent_items = []
+                self.calculate_total()
 
             elif not opt_before_save and opt_after_save:
                 items_after_save = [{"item_code": item.item_code, "qty":item.qty, "warehouse": item.warehouse, "option_number": item.option_number} for item in opt_after_save]
                 self.update({"items": group_similar_items(items_after_save, self.company)})
                 if self.items: self.update_packed_table()
+                self.calculate_total()
 
         elif self.items:
             items_before_save = [{"item_code": item.item_code, "qty": item.qty, "warehouse": item.warehouse} for item in self.items]
@@ -100,6 +101,21 @@ class CustomOpportunity(Opportunity):
             if items_before_save != items_after_save:
                 self.update({"items": group_similar_items(items_after_save, self.company)})
                 if self.items: self.update_packed_table()
+                self.calculate_total()
+    
+    def calculate_total(self):
+        total = base_total = 0
+        if not self.items:
+            self.total =  0
+            self.base_total = 0
+            return
+
+        for item in self.items:
+            total += item.amount
+            base_total += item.base_amount
+
+            self.total =  flt(total)
+            self.base_total = flt(base_total)
 
     def update_packed_table(self):
         packing_items = []
@@ -114,30 +130,9 @@ class CustomOpportunity(Opportunity):
         self.update({"parent_items": packing_items})
 
     def validate(self):
-        self._prev = frappe._dict(
-            {
-                "contact_date": frappe.db.get_value("Opportunity", self.name, "contact_date")
-                if (not cint(self.get("__islocal")))
-                else None,
-                "contact_by": frappe.db.get_value("Opportunity", self.name, "contact_by")
-                if (not cint(self.get("__islocal")))
-                else None,
-            }
-        )
-
-        self.make_new_lead_if_required()
-
-        self.validate_item_details()
-        self.validate_uom_is_integer("uom", "qty")
-        self.validate_cust_name()
-        self.map_fields()
-
-        if not self.title:
-            self.title = self.customer_name
-
-        if not self.with_items:
-            self.items = []
-
+        super(CustomOpportunity, self).validate()
+        self.update_items_table()
+        print(f"\033[93m {self.items[0].base_rate}")
         #self.validate_items() ###Custom Update
         self.set_option_number() ###Custmo Update
 
@@ -220,6 +215,7 @@ def get_item_details(item_code, company = None):
 
 @frappe.whitelist()
 def make_request_for_quotation(source_name, target_doc=None):
+    from frappe.utils import now, today, add_months
     def update_item(obj, target, source_parent):
         target.conversion_factor = 1.0
 
@@ -345,7 +341,8 @@ def make_request_for_quotation(source_name, target_doc=None):
                 "opportunity_item": item.name
             }
             add_item_to_table(item, "items", doclist, fields)
-        
+    doclist.transaction_date = now()
+    doclist.schedule_date = add_months(today(), 1)  
     return doclist
 
 def add_item_to_table(item, table = None, doc = None, other_fields = None):
@@ -386,7 +383,7 @@ def group_similar_items(items, company= None):
             qty = 0
             if group_items.get(item.get('item_code')):
                 qty = group_items.get(item.get("item_code"))[0]
-            group_items[item.get("item_code")] = [qty + item.get("qty"), item.get("technical_comment")]
+            group_items[item.get("item_code")] = [qty + item.get("qty"), item.get("technical_comment"), item.get("rate"), item.get("base_rate"), item.get("amount"), item.get("base_amount")]
     for item in group_items:
         groupeditems.append({
             "item_code": item,
@@ -398,7 +395,11 @@ def group_similar_items(items, company= None):
             "warehouse": get_item_warehouse(frappe.get_doc("Item", item), args = frappe._dict({"company": company}), overwrite_warehouse = True) if company else "",
             "image": frappe.db.get_value("Item", item, "image"),
             "option_number": items[0].get("option_number"),
-            "technical_comment": group_items[item][1]
+            "technical_comment": group_items[item][1],
+            "rate": group_items[item][2],
+            "base_rate": group_items[item][3],
+            "amount": group_items[item][4],
+            "base_amount": group_items[item][5],
         })
         
     return groupeditems
