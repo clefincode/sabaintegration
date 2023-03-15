@@ -121,9 +121,9 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
 					freeze: true,
 					callback: function(r) {
 						if(r.message) {                            
-							me.frm.clear_table("items");                            
+                            me.frm.clear_table("items");                            
                             me.frm.refresh_field("items");
-                            r.message[0].updated_items.forEach((row) => {                                
+                            r.message[1].not_updated_items.forEach((row) => {                                
 								let item = me.frm.add_child("items");
                                
 								//$.extend(item, row);
@@ -135,7 +135,7 @@ erpnext.buying.SupplierQuotationController = erpnext.buying.BuyingController.ext
                                 me.frm.page.body.find(`[data-fieldname="items"] [data-idx="${row.idx}"] .data-row`).addClass("highlight");                                
 							});
 
-                            r.message[1].not_updated_items.forEach((row) => {
+                            r.message[0].updated_items.forEach((row) => {
 								let item = me.frm.add_child("items");                                
 								//$.extend(item, row);
                                 for (const field in row){
