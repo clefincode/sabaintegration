@@ -94,7 +94,10 @@ class CustomQuotation(Quotation):
 		self.total_rate_without_margin = 0
 		for item in self.items:
 			self.total_rate_without_margin = self.total_rate_without_margin + (item.rate_without_profit_margin * item.qty)
-		self.total_margin = (self.total - self.total_rate_without_margin) / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
+		self.total_items_markup_value = (self.total - self.total_rate_without_margin)
+		self.expected_profit_loss_value = self.grand_total - (self.total_taxes_and_charges + self.total_rate_without_margin)
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.grand_total
+		self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return

@@ -203,6 +203,7 @@ erpnext.selling.QuotationController = erpnext.selling.SellingController.extend({
 				total += d.amount;
 			});
 			cur_frm.cscript.calculate_taxes_and_totals();
+			me.frm.doc.total_items_markup_value = me.frm.doc.total - me.frm.doc.total_rate_without_margin
 			refresh_field("items");
 		}
 	},
@@ -213,7 +214,9 @@ erpnext.selling.QuotationController = erpnext.selling.SellingController.extend({
 			total = total  + (d.rate * d.qty);
 		});
 		this.frm.doc.total_margin = (total - this.frm.doc.total_rate_without_margin) / this.frm.doc.total_rate_without_margin * 100;
+		this.frm.doc.total_items_markup_value = this.frm.doc.total - this.frm.doc.total_rate_without_margin
 		me.frm.refresh_field("total_margin");
+		me.frm.refresh_field("total_items_markup_value");
 	}
 });
 
