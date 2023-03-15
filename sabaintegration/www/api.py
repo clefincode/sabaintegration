@@ -436,3 +436,54 @@ def validate_item_code(doctype):
 			frappe.db.set_value(doctype, {"item_name": item.item_name, "name": item.name}, "item_code", itemdoc.item_code)
 	#frappe.db.commit()
 
+@frappe.whitelist()
+def update_party_details():
+	from erpnext.accounts.party import get_party_details
+	quotations = frappe.db.get_all("Quotation", {"docstatus": 0}, ["name", "contact_person", "party_name"])
+	for quote in quotations:
+		contacts = frappe.db.get_all("Dynamic Link", {
+			"link_name" : quote.party_name,
+			"parenttype": "Contact"
+		}, "parent")
+		found = False
+		for contact in contacts:
+			found = False
+			if quote.contact_person == contact.parent:
+				found = True
+				break
+		if not found and contacts:
+			doc = frappe.get_doc("Quotation", quote.name)
+
+			details = get_party_details(
+				party = doc.party_name, 
+				party_type = doc.quotation_to, 
+				price_list = doc.selling_price_list,
+				posting_date = doc.transaction_date,
+				company = doc.company
+				)
+				
+			for d in details.keys():
+				setattr(doc, d, details[d])
+			doc.save()
+	frappe.db.commit()
+
+@frappe.whitelist()
+def update_opp_owner():
+	opps = frappe.db.sql("""
+	select name, opportunity_owner
+	from `tabOpportunity`
+	where opportunity_owner IS NOT NULL and opportunity_owner != "" 
+	order by creation
+	""", as_dict = 1)  
+
+	for opp in opps:
+		frappe.db.set_value("Opportunity", opp.name, "sales_man", opp.opportunity_owner)
+		frappe.db.set_value("Opportunity", opp.name, "opportunity_owner", "")
+	frappe.db.commit()
+
+	opps = frappe.db.sql("""
+	select name, opportunity_owner
+	from `tabOpportunity`
+	where opportunity_owner != ""
+	""", as_dict = 1)  
+	return opps
