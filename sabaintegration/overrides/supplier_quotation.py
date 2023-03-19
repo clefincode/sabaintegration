@@ -272,6 +272,7 @@ def make_quotation(source_name, target_doc=None):
         details = get_party_details(
             party = target.party_name, 
             party_type = target.quotation_to, 
+            currency = target.currency,
             price_list = target.selling_price_list,
             posting_date = target.transaction_date,
             company = target.company

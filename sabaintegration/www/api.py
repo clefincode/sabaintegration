@@ -457,6 +457,7 @@ def update_party_details():
 			details = get_party_details(
 				party = doc.party_name, 
 				party_type = doc.quotation_to, 
+				currency = doc.currency,
 				price_list = doc.selling_price_list,
 				posting_date = doc.transaction_date,
 				company = doc.company
