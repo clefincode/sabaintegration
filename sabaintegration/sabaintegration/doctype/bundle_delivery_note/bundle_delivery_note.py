@@ -27,6 +27,11 @@ class BundleDeliveryNote(Document):
 		self.create_delivery_note()
 		self.setting_packed_items_values()
 		self.check_bundles()
+	
+	def before_cancel(self):
+		self.remove_packed_items()
+		delete_dn(self.name, self.delivery_note)
+		self.delivery_note = ''
 
 	def check_bundle_items_qtys(self, item):
 		bundle_child_qty = frappe.db.get_value('Packed Item', {'parent': self.sales_order, 'item_code': item.item_code, 'parent_item': self.item_parent}, 'qty')
@@ -205,6 +210,16 @@ class BundleDeliveryNote(Document):
 		else:
 			frappe.msgprint("<br>".join(list(set(messages))))
 
+	def remove_packed_items(self):
+		if self.get("delivery_note"):
+			delivery_note = frappe.get_doc("Delivery Note", self.delivery_note)
+			for item in self.stock_entries:
+				for p_item in delivery_note.packed_items:
+					if p_item.item_code == item.item_code and p_item.parent_item == self.item_parent:
+						frappe.db.set_value("Packed Item", p_item.name, 'qty', p_item.qty - item.qty)
+						break
+			
+
 	def submit_delivery_note(self):
 		self.setting_packed_items_values()
 		bundle_delivery_notes = frappe.db.get_list("Bundle Delivery Note", {
@@ -244,6 +259,7 @@ def cancel_stock_entries(bundle_delivery_note):
 	if stock_entries:
 		for st in stock_entries:
 			stock_entry = frappe.get_doc("Stock Entry", st['name'])
+			stock_entry.from_bundle_delivery_note = ''
 			stock_entry.cancel()
 
 
@@ -296,4 +312,12 @@ def get_items(sales_order = None, item_parent = None, item_code = None):
 					break
 		return items
 
-					
+def delete_dn(bdn, delivery_note):
+	doc = frappe.get_doc("Delivery Note", delivery_note)
+	if doc.get("packed_items"):
+		for item in doc.get("packed_items"):
+			if item.qty > 0: return
+		frappe.db.set_value("Bundle Delivery Note", bdn, "delivery_note", "")	
+		if doc.docstatus == 0:
+			doc.delete()
+			frappe.db.commit()

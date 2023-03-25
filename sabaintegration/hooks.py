@@ -39,7 +39,10 @@ doctype_js = {
 	"Request for Quotation": "public/js/doctype/request_for_quotation.js",
 	"Supplier Quotation": "public/js/doctype/supplier_quotation.js",
 	"Quotation": "public/js/doctype/quotation.js",
-	"Task": "public/js/doctype/tasks_test.js"
+	"Item": "public/js/doctype/item.js",
+	"Product Bundle": "public/js/doctype/product_bundle.js",
+	"Lead": "public/js/doctype/lead.js",
+	#"Attendance": "public/js/doctype/attendance.js"
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
@@ -107,7 +110,8 @@ override_doctype_class = {
 	'Request for Quotation': 'sabaintegration.overrides.request_for_quotation.CustomRequestforQuotation',
 	'Quotation': 'sabaintegration.overrides.quotation.CustomQuotation',
 	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
-	'Employee': 'sabaintegration.overrides.employee.CustomEmployee'
+	'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
+	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry'
 }
 
 # Document Events

@@ -1,0 +1,32 @@
+{
+ "custom_fields": [],
+ "custom_perms": [],
+ "doctype": "UOM Conversion Detail",
+ "property_setters": [
+  {
+   "_assign": null,
+   "_comments": null,
+   "_liked_by": null,
+   "_user_tags": null,
+   "creation": "2015-10-19 15:17:07.095656",
+   "default_value": null,
+   "doc_type": "UOM Conversion Detail",
+   "docstatus": 0,
+   "doctype_or_field": "DocField",
+   "field_name": "parent",
+   "idx": 0,
+   "modified": "2015-10-19 15:17:07.095656",
+   "modified_by": "Administrator",
+   "name": "UOM Conversion Detail-parent-length",
+   "owner": "Administrator",
+   "parent": null,
+   "parentfield": null,
+   "parenttype": null,
+   "property": "length",
+   "property_type": "Int",
+   "row_name": null,
+   "value": "218"
+  }
+ ],
+ "sync_on_migrate": 1
+}

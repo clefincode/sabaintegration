@@ -4,10 +4,34 @@
 import copy
 import frappe
 from frappe import _
-
+from frappe.utils import flt
 from erpnext.selling.doctype.quotation.quotation import Quotation
 
 class CustomQuotation(Quotation):
+	def onload(self):
+		if self.get("supplier_quotations"):
+			self.supplier_quotations_table = self.set_table_html()
+
+	def set_table_html(self):
+		submittedSQs = unsubmittedSQs = []
+		submittedSQs = copy.deepcopy(self.get("supplier_quotations"))
+		if not submittedSQs: return
+
+		elemtoadd = abs(len(unsubmittedSQs) - len(submittedSQs))
+		
+		unsubmittedSQs = list(set(get_unsubmitted_sq(self)))
+
+		if elemtoadd:
+			if len(submittedSQs) > len(unsubmittedSQs):
+				for i in range(elemtoadd):
+					unsubmittedSQs.append("")
+			elif len(submittedSQs) < len(unsubmittedSQs):
+				for i in range(elemtoadd):
+					submittedSQs.append("")
+		SQs = list(zip(submittedSQs, unsubmittedSQs))
+
+		return frappe.render_template("templates/includes/supplier_quotations_table.html", {"SQs": SQs})
+
 	def validate(self):
 		super(Quotation, self).validate()
 		self.set_status()
@@ -24,23 +48,68 @@ class CustomQuotation(Quotation):
 		self.update_total_margin()
 		self.set_option_number()
 
+		if self.is_new():
+			self.set_title()
+
+	def after_insert(self):
+		self.assign_quote()
+	
+	def assign_quote(self):
+		if check_if_from_opportunity_option(self):
+			opportunity = self.supplier_quotations[0].get("opportunity")
+			if opportunity :
+				user = frappe.db.get_value("Opportunity", opportunity, "opportunity_owner")
+				from frappe.desk.form.assign_to import add
+				try:
+					add({"doctype": self.doctype, "name": self.name, "assign_to": [user]})
+				except Exception:
+					frappe.msgprint("Couldn't assign the quotation to its sales man")
+
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
 			if frappe.db.exists("Product Bundle", {"new_item_code": item_row.item_code}) and item_row.opportunity:
 				for i in range(len(self.get("packed_items"))):
-					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code:
+					if not self.packed_items[i].parent_detail_docname and self.packed_items[i].parent_item == item_row.item_code and self.packed_items[i].get("section_title") == item_row.get("section_title"):
 						self.packed_items[i].parent_detail_docname = item_row.name
 	
+	def update_items_table(self):
+		itemslist = []
+		i = 1
+		for item in self.get("items"):
+			if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}): 
+				item.idx = i
+				itemslist.append(item)
+				i += 1
+				continue
+
+			for packed_item in self.get("packed_items"):
+				if item.item_code == packed_item.parent_item and packed_item.get("section_title") == item.get("section_title"):
+					item.idx = i
+					itemslist.append(item)
+					i += 1
+					break
+		self.update({"items": itemslist})
+
 	def update_total_margin(self):
-		self.total_margin = 0
+		self.total_rate_without_margin = 0
 		for item in self.items:
-			self.total_margin += item.margin_from_supplier_quotation
+			self.total_rate_without_margin = self.total_rate_without_margin + (item.rate_without_profit_margin * item.qty)
+		self.total_items_markup_value = (self.total - self.total_rate_without_margin)
+		self.expected_profit_loss_value = self.grand_total - (self.total_taxes_and_charges + self.total_rate_without_margin)
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.grand_total
+		self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
 	def set_option_number(self):
+		if self.option_number_from_opportunity: return
+
 		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
 		if opportunity_option:
 			self.option_number_from_opportunity =opportunity_option
-			
+	
+	def set_title(self):
+		if self.supplier_quotations:
+			self.title = frappe.db.get_value("Supplier Quotation", self.supplier_quotations[0].supplier_quotation, "title")
+
 	def before_submit(self):
 		if self.supplier_quotations: self.check_opportunity()
 
@@ -67,14 +136,19 @@ class CustomQuotation(Quotation):
 			else: option_items = frappe.db.get_all("Opportunity Item", {"parent": opportunity_name}, ["item_code", "qty"])
 			
 			itemslist = copy.deepcopy(self.items)
+			precision = self.items[0].precision("qty")
 			# iterate through items in the option to check if each item has been added to quotation
 			for option_item in option_items:
 				found = False
 				i = 0
 				notfounditem = option_item.item_code
 				for item in itemslist:
-						# if item is present with the same quantity and dection title, then check its bundles
-						if option_item.item_code == item.item_code and option_item.qty == item.qty and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
+						# if item is present with the same quantity and section title, then check its bundles
+						if option_item.item_code == item.item_code and ((option_item.section_title and option_item.section_title == item.section_title) or (not option_item.section_title and not item.section_title) ):
+							
+							if flt(option_item.qty, precision) != flt(item.qty, precision) and not check_permission_qty(frappe.session.user):
+								frappe.throw("Qty of item <b>{}</b> is not correct as in option".format(item.item_code))
+							
 							if not frappe.db.exists("Product Bundle", {"new_item_code": item.item_code}):
 								found = True
 								del itemslist[i]
@@ -93,6 +167,12 @@ class CustomQuotation(Quotation):
 					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
 					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
 	
+	def on_trash(self):
+		remove_quote_from_copied_option(self.name)
+
+	def before_cancel(self):
+		remove_quote_from_copied_option(self.name)
+
 ###Custom Update the next methods are overrided from from erpnext packed_item.py
 def make_packing_list(doc):
 	"Make/Update packing list for Product Bundle Item."
@@ -139,6 +219,7 @@ def make_packing_list(doc):
 				update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, doc)
 				update_packed_item_price_data(pi_row, item_data, doc)
 				update_packed_item_from_cancelled_doc(item_row, bundle_item, pi_row, doc)
+				pi_row.rate_before_margin = pi_row.rate if not pi_row.get("margin") else pi_row.rate / (pi_row.get('margin') - 1)
 
 				if set_price_from_children:  # create/update bundle item wise price dict
 					update_product_bundle_rate(parent_items_price, pi_row)
@@ -154,7 +235,8 @@ def check_bundle_items(parent_item, packed_table):
 		found = False
 		for packed_item in packed_table:
 			if packed_item.item_code == bundle_item.item_code and parent_item.item_code == packed_item.parent_item and parent_item.section_title == packed_item.section_title:
-				if packed_item.qty >= bundle_item.qty * parent_item.qty:
+				precision = packed_item.precision("qty")
+				if flt(packed_item.qty, precision) >= flt(bundle_item.qty * parent_item.qty, precision):
 					found = True
 					break
 				#else: return False
@@ -221,3 +303,47 @@ def reset_packing_list(doc, from_option):
 
 		if reset_table: doc.set("packed_items", packeditems)
 	return reset_table
+
+def get_unsubmitted_sq(doc):
+	for item in doc.items:
+		if item.get("opportunity") and item.get("opportunity_option_number"):
+			opportunity = item.opportunity
+			option_number = item.opportunity_option_number
+			break
+	unsubmitted_sq = []
+	rfqs = frappe.db.get_all("Request for Quotation Item", {"opportunity": opportunity, "opportunity_option_number": option_number, "docstatus": 1}, "parent", distinct = 1)
+
+	for rfq in rfqs:
+		sqs = frappe.db.get_all("Supplier Quotation Item", {"request_for_quotation": rfq.parent, "docstatus": 0}, "parent")
+		if sqs:
+			for sq in sqs:
+				unsubmitted_sq.append(sq.parent)
+
+	return unsubmitted_sq
+
+def remove_quote_from_copied_option(quote):
+	docs = frappe.db.get_all("Copied Opportunity Option", {"quotation" : quote}, "name")
+	for doc in docs:
+		frappe.db.set_value("Copied Opportunity Option", doc.name, "quotation", "")
+		frappe.db.set_value("Copied Opportunity Option", doc.name, "in_quotation", 0)
+
+@frappe.whitelist()
+def check_permission_qty(user):
+	if "0 Selling - Quotation edit qty" in frappe.get_roles():
+		return True
+	return False
+
+@frappe.whitelist()
+def check_qty(opportunity, option_number, item_code, qty, section_title = None):
+	strquery = """
+		select qty from `tabOpportunity Option`
+		where parent = '{0}' and parentfield = 'option_{1}' and item_code = '{2}' 
+	""".format(opportunity, option_number, item_code)
+
+	if (section_title == None):
+		strquery += "and section_title is null"
+	else: 
+		strquery += "and section_title = '{}'".format(section_title)
+
+	option_qty = frappe.db.sql(strquery, as_list = 1)
+	return flt(option_qty[0][0]) == flt(qty)

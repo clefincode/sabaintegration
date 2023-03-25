@@ -22,11 +22,39 @@ class CustomRequestforQuotation(RequestforQuotation):
         super(CustomRequestforQuotation, self).validate()
         if self.is_new():
             self.create_copied_option()
+            self.set_title()
         self.validate_bundle_items()
     
+    def on_submit(self):
+        frappe.db.set(self, "status", "Submitted")
+        for supplier in self.suppliers:
+            supplier.email_sent = 0
+            supplier.quote_status = "Pending"
+        if self.get("send_rfq_email"): self.send_to_supplier()
+        self.create_sq_automatically()
+
+    def create_sq_automatically(self):
+        if len(self.suppliers) == 1:
+            doc = first_supplier_quotation(self.name, for_supplier = self.suppliers[0].supplier, to_save = True)
+            doc.save()
+            frappe.db.commit()
+            self.reload()
+            frappe.msgprint("A Supplier Quotation <a href='/app/supplier-quotation/{0}'><b>{0}</b></a> is created".format(doc.name))
+
     def on_cancel(self):
         super(CustomRequestforQuotation, self).on_cancel()
         self.delete_copied_option()
+        self.delete_draft_sq()
+        
+    def delete_draft_sq(self):
+        supplier_quotation = frappe.db.get_all(
+            "Supplier Quotation",
+            {"supplier":self.suppliers[0].supplier , "opportunity" : self.opportunity , "docstatus" : 'Draft'},
+            "name"
+        )      
+        if supplier_quotation:
+            frappe.get_doc('Supplier Quotation' , supplier_quotation[0].name).delete()
+            frappe.db.commit()                    
     
     def after_delete(self):
         if self.docstatus == 0:
@@ -101,9 +129,30 @@ class CustomRequestforQuotation(RequestforQuotation):
             copied_option.insert()
             frappe.db.commit()
 
-    def autoname(self):
+    # def autoname(self):
         ###If this rfq is coming from an opportunity option,
         ###then the name of rfq will include the opportunity name and option
+        # is_from_opp = False
+        # opportunityTitle = None
+        # option_number = None
+        # for item in self.get("items"):
+        #     if item.opportunity and item.opportunity_option_number: 
+        #         opportunityTitle = frappe.db.get_value("Opportunity", item.opportunity, "title") or item.opportunity
+        #         option_number = item.opportunity_option_number
+        #         is_from_opp = True
+        #         break
+        # if is_from_opp:
+        #     from frappe.model.naming import make_autoname
+
+        #     name = "{0}-Option{1}-".format(opportunityTitle, option_number)
+        #     self.name= make_autoname(name+".####", "", self)
+
+        # else:
+        #     from frappe.model.naming import set_name_by_naming_series, make_autoname
+
+        #     set_name_by_naming_series(self)
+        
+    def set_title(self):
         is_from_opp = False
         opportunityTitle = None
         option_number = None
@@ -114,15 +163,24 @@ class CustomRequestforQuotation(RequestforQuotation):
                 is_from_opp = True
                 break
         if is_from_opp:
-            from frappe.model.naming import make_autoname
+            self.title = "{0}-Option{1}".format(opportunityTitle, option_number)
 
-            name = "Option{0}-{1}-".format(option_number, opportunityTitle)
-            self.name= make_autoname(name+".####", "", self)
+    def send_to_supplier(self):
+        """Sends RFQ mail to involved suppliers."""
+        if not self.get("send_rfq_email"): return
+        for rfq_supplier in self.suppliers:
+            if rfq_supplier.email_id is not None and rfq_supplier.send_email:
+                self.validate_email_id(rfq_supplier)
 
-        else:
-            from frappe.model.naming import set_name_by_naming_series, make_autoname
+                # make new user if required
+                update_password_link, contact = self.update_supplier_contact(rfq_supplier, self.get_link())
 
-            set_name_by_naming_series(self)
+                self.update_supplier_part_no(rfq_supplier.supplier)
+                self.supplier_rfq_mail(rfq_supplier, update_password_link, self.get_link())
+                rfq_supplier.email_sent = 1
+                if not rfq_supplier.contact:
+                    rfq_supplier.contact = contact
+                rfq_supplier.save()
 
     @frappe.whitelist()
     def make_packing_list(self):
@@ -279,11 +337,12 @@ def make_supplier_quotation_from_rfq(source_name, target_doc=None, for_supplier=
     else:
         doclist = not_first_supplier_quotation(source_name, target_doc, for_supplier)
     
+    from frappe.utils import now, today, add_months
     doclist.transaction_date = now()
     doclist.valid_till = add_months(today(), 1)
     return doclist
 
-def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
+def first_supplier_quotation(source_name, target_doc=None, for_supplier=None, to_save = None):
     def postprocess(source, target_doc):
         if for_supplier:
             target_doc.supplier = for_supplier
@@ -325,6 +384,7 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                     found = True
                     doclist.items[i].qty += item.qty
                     newitems = doclist.items
+                    if to_save and not doclist.items[i].warehouse: doclist.items[i].warehouse = "General - S"
                     break
                 i += 1
                     
@@ -337,7 +397,13 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None):
                 sqi.uom = item.uom
                 sqi.request_for_quotation = item.parent
                 sqi.warehouse = item.get("warehouse") or ""
+                if to_save and not sqi.warehouse: sqi.warehouse = "General - S"
                 newitems.append(sqi)
+    if to_save:
+        for item in newitems:
+            if not item.warehouse:
+                item.warehouse = "General - S"
+
     doclist.update({
         "items": newitems
     })

@@ -1,0 +1,38 @@
+<div class="sqs-break-up" style="overflow-x: auto;">
+    <table class="table table-bordered table-hover">
+		<thead>
+			<tr>
+				<th class="text-left">Submitted Supplier Quotations</th>
+                <th class="text-right">Unsubmitted Supplier Quotations</th>
+			</tr>
+		</thead>
+        <tbody>
+            {% for pair in SQs %}
+            <tr>
+                <td class="text-left">
+                    {% if pair[0] is string %}
+                    {{pair[0]}}
+                    {% else %}
+                    {% set title = frappe.db.get_value("Supplier Quotation", pair[0].supplier_quotation, 'title')%}
+                    {% if title is none %}
+                        {% set title = ""%}
+                    {% else %}
+                        {% set title = "(" + title + ")" %}
+                    {% endif %}
+                    <a href="\app\supplier-quotation\{{pair[0].supplier_quotation}}">{{pair[0].supplier_quotation}} {{title}}</a>
+                    {% endif %}
+                </td>
+                <td class="text-right">
+                    {% set title = frappe.db.get_value("Supplier Quotation", pair[1], 'title')%}
+                    {% if title is none %}
+                        {% set title = ""%}
+                    {% else %}
+                        {% set title = "(" + title + ")" %}
+                    {% endif %}
+                    <a href="\app\supplier-quotation\{{pair[1]}}">{{pair[1]}} {{title}}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+
+</div>

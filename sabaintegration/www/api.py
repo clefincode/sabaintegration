@@ -181,6 +181,7 @@ def group_similar_items(doc):
 		if not item.stock_qty : item.stock_qty = 0 
 		if not item.amount : item.amount = 0.00 
 		key = item.item_code + "_" + item.warehouse
+		#key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
 		group_item_qty[key] = group_item_qty.get(key, 0) + item.qty
 		group_item_amount[key] = group_item_amount.get(key, 0) + item.amount
 		group_item_stock_qty[key] = group_item_stock_qty.get(key, 0) + item.stock_qty
@@ -189,6 +190,7 @@ def group_similar_items(doc):
 	duplicate_list = []
 	for item in doc.items:
 		key = item.item_code + "_" + item.warehouse
+		#key = item.item_code + "_" + item.warehouse if item.get("warehouse") else item.item_code
 		if key in group_item_qty:
 			count += 1
 			item.qty = group_item_qty[key]
@@ -454,3 +456,57 @@ def get_clients(project):
 def send_updates():
 	from frappe.desk.form.document_follow import send_hourly_updates
 	send_hourly_updates()
+
+
+@frappe.whitelist()
+def update_party_details():
+	from erpnext.accounts.party import get_party_details
+	quotations = frappe.db.get_all("Quotation", {"docstatus": 0}, ["name", "contact_person", "party_name"])
+	for quote in quotations:
+		contacts = frappe.db.get_all("Dynamic Link", {
+			"link_name" : quote.party_name,
+			"parenttype": "Contact"
+		}, "parent")
+		found = False
+		for contact in contacts:
+			found = False
+			if quote.contact_person == contact.parent:
+				found = True
+				break
+		if not found and contacts:
+			doc = frappe.get_doc("Quotation", quote.name)
+
+			details = get_party_details(
+				party = doc.party_name, 
+				party_type = doc.quotation_to, 
+				currency = doc.currency,
+				price_list = doc.selling_price_list,
+				posting_date = doc.transaction_date,
+				company = doc.company
+				)
+				
+			for d in details.keys():
+				setattr(doc, d, details[d])
+			doc.save()
+	frappe.db.commit()
+
+@frappe.whitelist()
+def opp_sales_man_to_opp_owner():
+	opps = frappe.db.sql("""
+	select name, sales_man
+	from `tabOpportunity`
+	where sales_man IS NOT NULL and sales_man != "" 
+	order by creation
+	""", as_dict = 1)  
+
+	for opp in opps:
+		frappe.db.set_value("Opportunity", opp.name, "opportunity_owner", opp.sales_man)
+		frappe.db.set_value("Opportunity", opp.name, "sales_man", "")
+	frappe.db.commit()
+
+	opps = frappe.db.sql("""
+	select name, sales_man
+	from `tabOpportunity`
+	where sales_man != ""
+	""", as_dict = 1)  
+	return opps

@@ -40,6 +40,8 @@ class CustomOpportunity(Opportunity):
             })
         return bundles
 
+    def before_save(self):
+        self.update_items_table()
 
     def update_items_table(self):
         if (self.selected_option):
@@ -132,7 +134,6 @@ class CustomOpportunity(Opportunity):
     def validate(self):
         super(CustomOpportunity, self).validate()
         self.update_items_table()
-        print(f"\033[93m {self.items[0].base_rate}")
         #self.validate_items() ###Custom Update
         self.set_option_number() ###Custmo Update
 
@@ -258,15 +259,19 @@ def make_request_for_quotation(source_name, target_doc=None):
         """.format(source_name, op_num), as_dict = 1)
         opportunity = frappe.get_doc("Opportunity", source_name)
         bundles = opportunity.group_similar_bundle_items()
+        if req_packed_items:
+            pis = frappe.get_doc("Request for Quotation", req_packed_items[0].parent).get("packed_items")
+            precision = pis[0].precision("qty") if pis else 0
+
         for bundle in bundles:
             found = False
             existsitems = []
             qtys = {}
             for packed_item in req_packed_items:
-                if packed_item.item_code == bundle.get("item_code") and packed_item.qty == bundle.get("qty"):
+                if packed_item.item_code == bundle.get("item_code") and flt(packed_item.qty, precision) >= flt(bundle.get("qty"), precision):
                     found = True
                     break
-                elif packed_item.item_code == bundle.get("item_code") and packed_item.qty < bundle.get("qty"):
+                elif packed_item.item_code == bundle.get("item_code") and flt(packed_item.qty, precision) < flt(bundle.get("qty"), precision):
                     bundle["qty"] -= packed_item.qty                    
                     if bundle.get("qty") == 0:
                         found = True
@@ -313,10 +318,10 @@ def make_request_for_quotation(source_name, target_doc=None):
         select distinct item.name, item.item_code, item.item_name, item.qty, item.uom, item.warehouse,
         item.description, item.brand, item.image, item.parent, item.option_number
         #, rfqi.qty as r_qty
-        from `tabItem`
-        inner join `tabOpportunity Item` as item on item.item_code = `tabItem`.item_code
+        from `tabOpportunity Item` as item 
         left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
-        where  `tabItem`.is_stock_item = 1 and item.parent = '{}' and 
+        left outer join `tabProduct Bundle` as pd on item.item_code = pd.new_item_code
+        where  item.parent = '{}' and pd.new_item_code is null and
         (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty and rfqi.docstatus != 2))
         """.format(source_name), as_dict = 1)
 
@@ -342,7 +347,7 @@ def make_request_for_quotation(source_name, target_doc=None):
             }
             add_item_to_table(item, "items", doclist, fields)
     doclist.transaction_date = now()
-    doclist.schedule_date = add_months(today(), 1)  
+    doclist.schedule_date = add_months(today(), 1)
     return doclist
 
 def add_item_to_table(item, table = None, doc = None, other_fields = None):
