@@ -120,7 +120,7 @@ erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotation
 					freeze: true,
 					callback: function(r) {
 						if(r.message) {                            
-							me.frm.clear_table("items");                            
+                            me.frm.clear_table("items");                            
                             me.frm.refresh_field("items");
                             r.message[1].not_updated_items.forEach((row) => {                                
 								let item = me.frm.add_child("items");
