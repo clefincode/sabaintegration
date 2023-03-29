@@ -377,7 +377,6 @@ def make_quotation(source_name, target_doc=None):
         packed_items = [[item.item_code, item.parent_item, item.section_title] for item in doclist.get("packed_items")] or []
         packed_rfg = [item.item_code for item in rfq_doc.packed_items]
         # for conversion rate pupose
-        print(f"\033[93m {opportunity_option_items}")
         conversion_rate = get_exchange_rate(doclist.currency, "USD")
 
         # iterate through items in request for quotation items
