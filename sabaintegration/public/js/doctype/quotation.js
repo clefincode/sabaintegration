@@ -1,8 +1,6 @@
 // Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 // License: GNU General Public License v3. See license.txt
 
-
-{% include 'sabaintegration/selling/sales_common.js' %}
 {% include 'erpnext/selling/doctype/quotation/quotation.js' %}
 
 frappe.ui.form.on('Quotation', {
@@ -31,15 +29,87 @@ frappe.ui.form.on('Quotation', {
 });
 
 erpnext.selling.CustomQuotationController = class CustomQuotationController extends erpnext.selling.QuotationController {
-	party_name() {
+	setup() {
+		super.setup();
+		frappe.ui.form.on(this.frm.cscript.tax_table, "included_in_print_rate", function(frm, cdt, cdn) {
+			cur_frm.cscript.set_dynamic_labels();
+			cur_frm.cscript.calculate_taxes_and_totals();
+		});
+		frappe.ui.form.on(this.frm.doctype, "discount_amount", function(frm) {
+			frm.cscript.set_dynamic_labels();
+
+			if (!frm.via_discount_percentage) {
+				frm.doc.additional_discount_percentage = 0;
+			}
+
+			frm.cscript.calculate_taxes_and_totals();
+		});
+	}
+	refresh() {
+		super.refresh();
+		this.set_dynamic_labels();
+	}
+	currency() {
+		super.currency();
+		this.set_dynamic_labels();
+	}
+	customer() {
 		var me = this;
 		erpnext.utils.get_party_details(this.frm, null, null, function() {
 			me.apply_price_list();
 		});
+	}
 
-		if(me.frm.doc.quotation_to=="Lead" && me.frm.doc.party_name) {
-			me.frm.trigger("get_lead_details");
-		}
+	sales_partner() {
+		this.apply_pricing_rule();
+	}
+
+	campaign() {
+		this.apply_pricing_rule();
+	}
+
+	selling_price_list() {
+		this.apply_price_list();
+		this.set_dynamic_labels();
+	}
+	price_list_currency() {
+		super.price_list_currency();
+		this.set_dynamic_labels();
+	}
+	set_dynamic_labels() {
+		// What TODO? should we make price list system non-mandatory?
+		this.frm.toggle_reqd("plc_conversion_rate",
+			!!(this.frm.doc.price_list_name && this.frm.doc.price_list_currency));
+
+		var company_currency = this.get_company_currency();
+		this.change_form_labels(company_currency);
+		this.change_grid_labels(company_currency);
+		this.frm.refresh_fields();
+	}
+
+	change_grid_labels(company_currency) {
+		super.change_grid_labels(company_currency);
+		console.log(this.frm.doc.currency)
+		this.frm.set_currency_labels(["base_total_rate_without_markup", "base_total_items_markup_value",
+			"base_expected_profit_loss_value"], company_currency);
+		
+		this.frm.set_currency_labels(["total_rate_without_margin", "total_items_markup_value",
+			"expected_profit_loss_value"], this.frm.doc.currency);
+
+		// toggle fields
+		this.frm.toggle_display(["base_total_rate_without_markup", "base_total_items_markup_value",
+			"base_expected_profit_loss_value"], this.frm.doc.currency != company_currency);
+
+		// this.frm.toggle_display(["total_rate_without_margin", "total_items_markup_value",
+		// 	"expected_profit_loss_value"], this.frm.doc.price_list_currency != company_currency);
+	}
+	campaign() {
+		this.apply_pricing_rule();
+	}
+
+	selling_price_list() {
+		this.apply_price_list();
+		this.set_dynamic_labels();
 	}
 
 	async total_margin(){

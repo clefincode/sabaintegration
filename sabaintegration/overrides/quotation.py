@@ -91,13 +91,20 @@ class CustomQuotation(Quotation):
 		self.update({"items": itemslist})
 
 	def update_total_margin(self):
-		self.total_rate_without_margin = 0
+		self.total_rate_without_margin = self.base_total_rate_without_margin = 0
 		for item in self.items:
-			self.total_rate_without_margin = self.total_rate_without_margin + (item.rate_without_profit_margin * item.qty)
+			self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
+
+		self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
+		
 		self.total_items_markup_value = (self.total - self.total_rate_without_margin)
-		self.expected_profit_loss_value = self.grand_total - (self.total_taxes_and_charges + self.total_rate_without_margin)
-		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.grand_total
+		self.base_total_items_markup_value = self.total_items_markup_value * self.conversion_rate
+
 		self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
+
+		self.expected_profit_loss_value = self.grand_total - (self.total_taxes_and_charges + self.total_rate_without_margin)
+		self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.grand_total
 
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return
@@ -305,11 +312,15 @@ def reset_packing_list(doc, from_option):
 	return reset_table
 
 def get_unsubmitted_sq(doc):
+	opportunity = option_number = None
 	for item in doc.items:
-		if item.get("opportunity") and item.get("opportunity_option_number"):
+		if item.get("opportunity"):
 			opportunity = item.opportunity
-			option_number = item.opportunity_option_number
+			if item.get("opportunity_option_number"):
+				option_number = item.opportunity_option_number
 			break
+	if not opportunity: return
+	if not option_number: option_number = 0
 	unsubmitted_sq = []
 	rfqs = frappe.db.get_all("Request for Quotation Item", {"opportunity": opportunity, "opportunity_option_number": option_number, "docstatus": 1}, "parent", distinct = 1)
 
