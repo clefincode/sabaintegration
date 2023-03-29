@@ -363,16 +363,21 @@ def make_quotation(source_name, target_doc=None):
             }, "name")
         if copied_opportunity_option:
             opportunity_option_items = frappe.db.get_all("Opportunity Option", {"parent":copied_opportunity_option[0]["name"]}, ['*'])
-        else: 
+        elif opportunity_option_number: 
             opportunity_option_items = frappe.db.get_all("Opportunity Option",{
                 "parent": opportunity,
                 "parentfield": "option_"+str(opportunity_option_number)
+            }, ["*"])
+        else:
+            opportunity_option_items = frappe.db.get_all("Opportunity Item",{
+                "parent": opportunity,
+                "parentfield": "items"
             }, ["*"])
         quotation_items = [[item.item_code, item.section_title] for item in doclist.get("items")] or []
         packed_items = [[item.item_code, item.parent_item, item.section_title] for item in doclist.get("packed_items")] or []
         packed_rfg = [item.item_code for item in rfq_doc.packed_items]
         # for conversion rate pupose
-
+        print(f"\033[93m {opportunity_option_items}")
         conversion_rate = get_exchange_rate(doclist.currency, "USD")
 
         # iterate through items in request for quotation items
@@ -559,19 +564,20 @@ def set_rates(source_name, target_name):
     for item in itemslist[:]:
         item_exists = False     
         for source_item in source_doc.items:
-            if item.item_code == source_item.item_code and item.rate != source_item.rate:
+            if item.item_code == source_item.item_code:
                 item_exists = True
-                item.profit_margin = source_item.profit_margin
-                item.rate = source_item.rate / conversion_rate
-                item.amount = item.rate * item.qty if item.qty > 0 else 0
-                item.base_rate = source_item.get("base_rate")
-                item.net_rate = source_item.get("net_rate") / conversion_rate
-                item.base_net_rate = source_item.get("base_net_rate")
-                item.base_amount = item.get("base_rate") * item.qty if item.qty > 0 else 0
-                item.net_amount = item.get("net_rate") * item.qty if item.qty > 0 else 0
-                item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
-                item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
-                item.discount_amount = flt(item.rate - item.price_list_rate)
+                if item.rate != source_item.rate:
+                    item.profit_margin = source_item.profit_margin
+                    item.rate = source_item.rate / conversion_rate
+                    item.amount = item.rate * item.qty if item.qty > 0 else 0
+                    item.base_rate = source_item.get("base_rate")
+                    item.net_rate = source_item.get("net_rate") / conversion_rate
+                    item.base_net_rate = source_item.get("base_net_rate")
+                    item.base_amount = item.get("base_rate") * item.qty if item.qty > 0 else 0
+                    item.net_amount = item.get("net_rate") * item.qty if item.qty > 0 else 0
+                    item.base_net_amount = item.get("base_net_rate") * item.qty if item.qty > 0 else 0
+                    item.discount_percentage = flt((1 - item.rate / item.price_list_rate) * 100.0, item.precision("discount_percentage")) if item.price_list_rate > 0 else 0
+                    item.discount_amount = flt(item.rate - item.price_list_rate)
                 break
         if not item_exists:
             itemslist.remove(item)
