@@ -150,6 +150,28 @@ frappe.ui.form.on("Opportunity", {
                 }
             }
         };
+        // Only submitted options allowed to create rfq 
+        // hiding the buttons when selected option is not submitted
+        // Buttons will be visible when document is saved after submitting the selected option
+        frm.trigger("check_selected_option_status")
+
+    },
+    check_selected_option_status: function(frm) { 
+        // console.log("triggered");
+        var rfq = document.querySelectorAll('[data-label="Request%20For%20Quotation"]');
+        var rfq_new_tab = document.querySelectorAll('[data-label="Request%20For%20Quotation%20New%20Tab"]');
+        if (frm.doc['option'+frm.doc.selected_option+'status'] == "1" ){
+            rfq[0].style.display = "block";
+            rfq_new_tab[0].style.display = "block";
+        }
+        else{
+            rfq[0].style.display = "none";
+            rfq_new_tab[0].style.display = "none";
+            frappe.show_alert({
+                message:__("You can not create RFQ because the selected option hasn't been not submitted yet."),
+                indicator:'red'
+            }, 5);
+        }
     },
     set_option_items: async function(frm, option_number){
         frm.doc.items=[];
@@ -290,17 +312,47 @@ frappe.ui.form.on("Opportunity", {
         frappe.confirm(
             'Are you sure you want to submit this option?',
             function(){
-                frm.set_df_property(option, "read_only", 1);
-                frm.set_value(option.replace('_','') + 'status', '1');
-                refresh_field(option.replace('_','') + 'status');
+                //in the single option, before submitting the option, 
+                //user must provide different section titles for duplicate items
+                const allitems =[];
+                const allitems_with_idx = [];
+                frm.fields_dict[option].grid.data.forEach(
+                    function(el){
+                        var section ;
+                        if (el.section_title == undefined){
+                            section ="";
+                        }
+                        else{
+                            section =el.section_title;
+                        }
+                        allitems_with_idx.push("idx:"+el.idx+", Item Code:"+el.item_code+", Section Title:"+section);
+                        allitems.push("Item Code:"+el.item_code+", Section Title:"+section)
+                    }
+                )
+                let strArray = allitems;
+                let findDuplicates = arr => arr.filter((item, index) => arr.indexOf(item) !== index)
+                let found =findDuplicates(strArray);
                 
-                let option_btn_name = option.replace('_','');
-                frm.set_df_property(option_btn_name + '_submit', 'hidden', 1);
-                if (frappe.user_roles.includes('0 CRM – Opportunity Option Cancellation')) {
-                    frm.set_df_property(option_btn_name + '_cancel', 'hidden', 0);
+                if(found.length>0){
+                    for (let i = 0; i < found.length; i++) {
+                        frappe.show_alert({
+                            message:__(found[i]+' ,is duplicated'),
+                            indicator:'red'
+                        }, 10);
+                    }
                 }
-                window.close();
-                
+                else{
+                    frm.set_df_property(option, "read_only", 1);
+                    frm.set_value(option.replace('_','') + 'status', '1');
+                    refresh_field(option.replace('_','') + 'status');
+                    
+                    let option_btn_name = option.replace('_','');
+                    frm.set_df_property(option_btn_name + '_submit', 'hidden', 1);
+                    if (frappe.user_roles.includes('0 CRM – Opportunity Option Cancellation')) {
+                        frm.set_df_property(option_btn_name + '_cancel', 'hidden', 0);
+                    }
+                    window.close();
+                }                
             },
             function(){
             }
