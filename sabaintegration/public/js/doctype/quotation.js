@@ -2,6 +2,10 @@
 // License: GNU General Public License v3. See license.txt
 
 {% include 'erpnext/selling/doctype/quotation/quotation.js' %}
+{% include 'sabaintegration/selling/costs.js' %}
+
+frappe.provide("sabaintegration.costs")
+
 
 frappe.ui.form.on('Quotation', {
 	onload: function(frm){
@@ -21,10 +25,30 @@ frappe.ui.form.on('Quotation', {
 		});
 		frm.doc.total_rate_without_margin = total;
 		frm.refresh_field("total_rate_without_margin");
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
 	},
 	items_on_form_rendered: function(){
 		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
+	},
+	refresh: function(frm){
+		if(frm.$wrapper.find(`.form-documents [data-doctype="Opportunity"]`).length == 0 && frm.doc.opportunity ){
+            frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+                `<div class="document-link" data-doctype="Opportunity">
+                    <div class="document-link-badge" data-doctype="Opportunity">
+                        <span class="count">1</span>
+                        <a class="badge-link" href="/app/opportunity/${frm.doc.opportunity}">Opportunity</a>
+                </div>`);
+        }
+		if(frm.$wrapper.find(`.form-documents [data-doctype="Supplier Quotation"]`).length == 0 && frm.doc.supplier_quotation){
+            frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+                `<div class="document-link" data-doctype="Supplier Quotation">
+                    <div class="document-link-badge" data-doctype="Supplier Quotation">
+                        <span class="count">1</span>
+                        <a class="badge-link" href="/app/supplier-quotation/${frm.doc.supplier_quotation}">Supplier Quotation</a>
+                </div>`);
+        }
 	}
 });
 
@@ -45,8 +69,8 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 			frm.cscript.calculate_taxes_and_totals();
 		});
 	}
-	refresh() {
-		super.refresh();
+	refresh(doc, dt, dn) {
+		super.refresh(doc, dt, dn);
 		this.set_dynamic_labels();
 	}
 	currency() {
@@ -89,16 +113,15 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 
 	change_grid_labels(company_currency) {
 		super.change_grid_labels(company_currency);
-		console.log(this.frm.doc.currency)
 		this.frm.set_currency_labels(["base_total_rate_without_markup", "base_total_items_markup_value",
-			"base_expected_profit_loss_value"], company_currency);
+			"base_expected_profit_loss_value", "base_total_costs", "base_total_costs_with_material_costs"], company_currency);
 		
 		this.frm.set_currency_labels(["total_rate_without_margin", "total_items_markup_value",
-			"expected_profit_loss_value"], this.frm.doc.currency);
+			"expected_profit_loss_value", "total_costs", "total_costs_with_material_costs"], this.frm.doc.currency);
 
 		// toggle fields
 		this.frm.toggle_display(["base_total_rate_without_markup", "base_total_items_markup_value",
-			"base_expected_profit_loss_value"], this.frm.doc.currency != company_currency);
+			"base_expected_profit_loss_value", "base_total_costs", "base_total_costs_with_material_costs"], this.frm.doc.currency != company_currency);
 
 		// this.frm.toggle_display(["total_rate_without_margin", "total_items_markup_value",
 		// 	"expected_profit_loss_value"], this.frm.doc.price_list_currency != company_currency);
@@ -124,7 +147,9 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 			});
 			cur_frm.cscript.calculate_taxes_and_totals();
 			me.frm.doc.total_items_markup_value = me.frm.doc.total - me.frm.doc.total_rate_without_margin
-			refresh_field("items");
+			me.frm.doc.base_total_items_markup_value = me.frm.doc.total_items_markup_value * me.frm.doc.conversion_rate
+			sabaintegration.set_cost_value()
+			sabaintegration.update_costs()
 		}
 	}
 	calculate_total_margin(){
@@ -135,8 +160,28 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 		});
 		this.frm.doc.total_margin = (total - this.frm.doc.total_rate_without_margin) / this.frm.doc.total_rate_without_margin * 100;
 		this.frm.doc.total_items_markup_value = this.frm.doc.total - this.frm.doc.total_rate_without_margin
-		me.frm.refresh_field("total_margin");
-		me.frm.refresh_field("total_items_markup_value");
+		this.frm.doc.base_total_items_markup_value = this.frm.doc.total_items_markup_value * this.frm.doc.conversion_rate;
+
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
+	}
+	costs_template(){
+		var me = this;
+		if(this.frm.doc.costs_template) {
+			return this.frm.call({
+				method: "sabaintegration.overrides.quotation.get_costs",
+				args: {
+					"costs_template": this.frm.doc.costs_template
+				},
+				callback: function(r) {
+					if(!r.exc) {
+						me.frm.set_value("costs", r.message);
+						sabaintegration.set_cost_value()
+						sabaintegration.update_costs()
+					}
+				}
+			});
+		}
 	}
 }
 
@@ -179,6 +224,22 @@ frappe.ui.form.on('Quotation Item', {
 	
 
 })
+
+frappe.ui.form.on('Cost', {
+	cost_value: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		if (d.cost_value == 0) frappe.model.set_value(cdt, cdn, "cost_percentage", 0)
+		d.cost_percentage = d.cost_value / frm.doc.total * 100;
+		sabaintegration.update_costs()
+	},
+	cost_percentage: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		d.cost_value = frm.doc.total * d.cost_percentage / 100;
+		d.base_cost_value = d.cost_value * frm.doc.conversion_rate;
+		sabaintegration.update_costs()
+	}
+})
+
 const check_change_qty = async function(frm, d){
 	frappe.call({
 		method: "sabaintegration.overrides.quotation.check_permission_qty",

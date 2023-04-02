@@ -46,6 +46,7 @@ class CustomQuotation(Quotation):
 		make_packing_list(self) 
 
 		self.update_total_margin()
+		self.update_costs()
 		self.set_option_number()
 
 		if self.is_new():
@@ -91,20 +92,31 @@ class CustomQuotation(Quotation):
 		self.update({"items": itemslist})
 
 	def update_total_margin(self):
-		self.total_rate_without_margin = self.base_total_rate_without_margin = 0
+		self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
 		for item in self.items:
 			self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
-
+			self.total += flt(item.amount, item.precision("amount"))
 		self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
+		self.base_total = self.total * self.conversion_rate
 		
 		self.total_items_markup_value = (self.total - self.total_rate_without_margin)
 		self.base_total_items_markup_value = self.total_items_markup_value * self.conversion_rate
-
 		self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
-		self.expected_profit_loss_value = self.grand_total - (self.total_taxes_and_charges + self.total_rate_without_margin)
+	def update_costs(self):
+		total_costs = 0.00
+		if self.get("costs"): 
+			for row in self.costs:
+				total_costs += row.cost_value
+		self.total_costs = total_costs
+		self.base_total_costs = self.total_costs * self.conversion_rate
+		
+		self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
+		self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
+
+		self.expected_profit_loss_value = self.total - self.total_costs_with_material_costs
 		self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
-		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.grand_total
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.total
 
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return
@@ -358,3 +370,23 @@ def check_qty(opportunity, option_number, item_code, qty, section_title = None):
 
 	option_qty = frappe.db.sql(strquery, as_list = 1)
 	return flt(option_qty[0][0]) == flt(qty)
+
+
+@frappe.whitelist()
+def get_costs(costs_template):
+
+	from frappe.model import child_table_fields, default_fields
+
+	template = frappe.get_doc("Costs Template", costs_template)
+
+	template_list = []
+	for i, cost in enumerate(template.get("costs")):
+		cost = cost.as_dict()
+
+		for fieldname in default_fields + child_table_fields:
+			if fieldname in cost:
+				del cost[fieldname]
+
+		template_list.append(cost)
+
+	return template_list
