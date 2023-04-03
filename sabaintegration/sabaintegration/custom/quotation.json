@@ -1337,7 +1337,7 @@
    "insert_after": "total_items_markup_value",
    "is_system_generated": 0,
    "is_virtual": 0,
-   "label": "Costs",
+   "label": "Indirect Costs",
    "length": 0,
    "mandatory_depends_on": null,
    "modified": "2023-03-30 11:32:59.790518",
