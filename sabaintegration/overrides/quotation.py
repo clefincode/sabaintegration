@@ -98,7 +98,7 @@ class CustomQuotation(Quotation):
 			self.total += flt(item.amount, item.precision("amount"))
 		self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
 		self.base_total = self.total * self.conversion_rate
-		
+
 		self.total_items_markup_value = (self.total - self.total_rate_without_margin)
 		self.base_total_items_markup_value = self.total_items_markup_value * self.conversion_rate
 		self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
@@ -107,6 +107,7 @@ class CustomQuotation(Quotation):
 		total_costs = 0.00
 		if self.get("costs"): 
 			for row in self.costs:
+				row.cost_value = self.net_total * row.cost_percentage / 100
 				total_costs += row.cost_value
 		self.total_costs = total_costs
 		self.base_total_costs = self.total_costs * self.conversion_rate
@@ -114,9 +115,9 @@ class CustomQuotation(Quotation):
 		self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
 		self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
 
-		self.expected_profit_loss_value = self.total - self.total_costs_with_material_costs
+		self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs
 		self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
-		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.total
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total
 
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return

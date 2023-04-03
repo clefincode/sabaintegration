@@ -25,8 +25,7 @@ frappe.ui.form.on('Quotation', {
 		});
 		frm.doc.total_rate_without_margin = total;
 		frm.refresh_field("total_rate_without_margin");
-		sabaintegration.set_cost_value()
-		sabaintegration.update_costs()
+
 	},
 	items_on_form_rendered: function(){
 		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
@@ -38,7 +37,7 @@ frappe.ui.form.on('Quotation', {
                 `<div class="document-link" data-doctype="Opportunity">
                     <div class="document-link-badge" data-doctype="Opportunity">
                         <span class="count">1</span>
-                        <a class="badge-link" href="/app/opportunity/${frm.doc.opportunity}">Opportunity</a>
+                        <a class="badge-link" href="/app/opportunity/view/list?name=${frm.doc.opportunity}">Opportunity</a>
                 </div>`);
         }
 		if(frm.$wrapper.find(`.form-documents [data-doctype="Supplier Quotation"]`).length == 0 && frm.doc.supplier_quotation){
@@ -46,8 +45,25 @@ frappe.ui.form.on('Quotation', {
                 `<div class="document-link" data-doctype="Supplier Quotation">
                     <div class="document-link-badge" data-doctype="Supplier Quotation">
                         <span class="count">1</span>
-                        <a class="badge-link" href="/app/supplier-quotation/${frm.doc.supplier_quotation}">Supplier Quotation</a>
+                        <a class="badge-link" href="/app/supplier-quotation/view/list?name=${frm.doc.supplier_quotation}">Supplier Quotation</a>
                 </div>`);
+        }
+		if(frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0 && frm.doc.supplier_quotation){
+			frappe.db.get_list("From Supplier Quotation", {filters:{"parent": frm.doc.name} , fields:["request_for_quotation"]}).then((res) => {
+			if(res.length != 0){
+				let rfq_list = []
+				res.map((r) => {
+				rfq_list.push(r.request_for_quotation);
+				});
+				frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+					`<div class="document-link" data-doctype="Request for Quotation">
+						<div class="document-link-badge" data-doctype="Request for Quotation">
+							<span class="count">${res.length}</span>
+							<a class="badge-link" href='/app/request-for-quotation/view/list?name=["in" , [${res.map((r) => {return '"'+r.request_for_quotation+'"'})}]]'>Request for Quotation</a>
+					</div>`);
+			}
+            
+			});
         }
 	}
 });
@@ -135,15 +151,31 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 		this.set_dynamic_labels();
 	}
 
+	additional_discount_percentage() {
+		this.frm.cscript.calculate_taxes_and_totals();
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
+	}
+
+	apply_discount_on(){
+		this.frm.cscript.calculate_taxes_and_totals();
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
+	}
+
+	discount_amount(){
+		this.frm.cscript.calculate_taxes_and_totals();
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
+	}
+
 	async total_margin(){
 		var me = this;
 		if (me.frm.doc.items){
-			let total = 0;
 			await $.each(me.frm.doc.items || [], function(i, d) {
 				d.margin_from_supplier_quotation = me.frm.doc.total_margin;
 				d.rate = d.rate_without_profit_margin + (d.rate_without_profit_margin * d.margin_from_supplier_quotation  / 100)
 				d.amount = d.rate * d.qty;
-				total += d.amount;
 			});
 			cur_frm.cscript.calculate_taxes_and_totals();
 			me.frm.doc.total_items_markup_value = me.frm.doc.total - me.frm.doc.total_rate_without_margin
@@ -153,15 +185,11 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 		}
 	}
 	calculate_total_margin(){
-		let me = this;
-		let total = 0
-		$.each(this.frm.doc.items || [], function(i, d) {
-			total = total  + (d.rate * d.qty);
-		});
-		this.frm.doc.total_margin = (total - this.frm.doc.total_rate_without_margin) / this.frm.doc.total_rate_without_margin * 100;
+		cur_frm.cscript.calculate_taxes_and_totals();
+		this.frm.doc.total_margin = (this.frm.doc.total - this.frm.doc.total_rate_without_margin) / this.frm.doc.total_rate_without_margin * 100;
 		this.frm.doc.total_items_markup_value = this.frm.doc.total - this.frm.doc.total_rate_without_margin
 		this.frm.doc.base_total_items_markup_value = this.frm.doc.total_items_markup_value * this.frm.doc.conversion_rate;
-
+		
 		sabaintegration.set_cost_value()
 		sabaintegration.update_costs()
 	}
@@ -191,6 +219,7 @@ extend_cscript(cur_frm.cscript, new erpnext.selling.CustomQuotationController({f
 frappe.ui.form.on('Quotation Item', {
 	items_remove: function(frm){
 		frm.trigger("set_total_without_margin");
+		frm.script_manager.trigger("calculate_total_margin");
 	},
 	margin_from_supplier_quotation: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
@@ -205,12 +234,16 @@ frappe.ui.form.on('Quotation Item', {
 		}
 		d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
 		frm.trigger("set_total_without_margin");
+		frm.script_manager.trigger("calculate_total_margin");
 	},
 	qty: function(frm, cdt, cdn){
-		frm.trigger("set_total_without_margin");
 		if (frm.doc.supplier_quotations){
 			var d = locals[cdt][cdn];
 			check_change_qty(frm, d)
+		}
+		else {
+			frm.trigger("set_total_without_margin");
+			frm.script_manager.trigger("calculate_total_margin");
 		}
 
 	},
@@ -229,13 +262,16 @@ frappe.ui.form.on('Cost', {
 	cost_value: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		if (d.cost_value == 0) frappe.model.set_value(cdt, cdn, "cost_percentage", 0)
-		d.cost_percentage = d.cost_value / frm.doc.total * 100;
+		d.cost_percentage = d.cost_value / frm.doc.net_total * 100;
 		sabaintegration.update_costs()
 	},
 	cost_percentage: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
-		d.cost_value = frm.doc.total * d.cost_percentage / 100;
+		d.cost_value = frm.doc.net_total * d.cost_percentage / 100;
 		d.base_cost_value = d.cost_value * frm.doc.conversion_rate;
+		sabaintegration.update_costs()
+	},
+	costs_remove: function(frm, cdt, cdn){
 		sabaintegration.update_costs()
 	}
 })
@@ -262,6 +298,8 @@ const check_change_qty = async function(frm, d){
 						setTimeout(async () => {
 							let packed_items = await get_packed_items(frm, d);
 							if (packed_items) update_packed_items_qty(frm, packed_items, d)					
+							frm.trigger("set_total_without_margin");
+							frm.script_manager.trigger("calculate_total_margin");
 							frappe.dom.unfreeze();
 						}, 2000)
 					},
@@ -273,7 +311,9 @@ const check_change_qty = async function(frm, d){
 				else {
 					setTimeout(async () => {
 						let packed_items = await get_packed_items(frm, d);
-						if (packed_items) update_packed_items_qty(frm, packed_items, d)					
+						if (packed_items) update_packed_items_qty(frm, packed_items, d)	
+						frm.trigger("set_total_without_margin");
+						frm.script_manager.trigger("calculate_total_margin");				
 						frappe.dom.unfreeze();
 					}, 2000)
 				}
