@@ -24,6 +24,27 @@ frappe.ui.form.on("Request for Quotation",{
 		if (frm.is_new()){
 			frm.trigger("schedule_date");
 		}
+		// render Request for Quotation badge in the connection section
+		if(frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0){
+		frappe.call({
+			method: "sabaintegration.overrides.request_for_quotation.get_quotations_related_to_rfq",
+			args: {
+				doc_name: frm.doc.name
+			},
+			callback: function(r) {	
+				if(r.message.quotations && r.message.quotations.length != 0){
+					frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+						`<div class="document-link" data-doctype="Quotation">
+							<div class="document-link-badge" data-doctype="Quotation">
+								<span class="count">${r.message.quotations.length}</span>
+								<a class="badge-link" href="/app/quotation/view/list?request_for_quotation=${frm.doc.name}">Quotation</a>
+						</div>`);
+				}		
+				
+			}				
+			
+		});
+	}		
 	},
 
     make_supplier_quotation_opp: function(frm) {
