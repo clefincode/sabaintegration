@@ -391,3 +391,13 @@ def get_costs(costs_template):
 		template_list.append(cost)
 
 	return template_list
+
+@frappe.whitelist()
+def get_rfq_related_to_quotation(doc_name):
+	rfq = frappe.db.sql(f"""
+	SELECT DISTINCT request_for_quotation
+	FROM `tabFrom Supplier Quotation`
+	WHERE parent = '{doc_name}'
+	""" , as_dict = True)
+
+	return {"rfq" : rfq}

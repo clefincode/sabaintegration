@@ -48,22 +48,23 @@ frappe.ui.form.on('Quotation', {
                         <a class="badge-link" href="/app/supplier-quotation/view/list?name=${frm.doc.supplier_quotation}">Supplier Quotation</a>
                 </div>`);
         }
-		if(frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0 && frm.doc.supplier_quotation){
-			frappe.db.get_list("From Supplier Quotation", {filters:{"parent": frm.doc.name} , fields:["request_for_quotation"]}).then((res) => {
-			if(res.length != 0){
-				let rfq_list = []
-				res.map((r) => {
-				rfq_list.push(r.request_for_quotation);
-				});
-				frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
-					`<div class="document-link" data-doctype="Request for Quotation">
-						<div class="document-link-badge" data-doctype="Request for Quotation">
-							<span class="count">${res.length}</span>
-							<a class="badge-link" href='/app/request-for-quotation/view/list?name=["in" , [${res.map((r) => {return '"'+r.request_for_quotation+'"'})}]]'>Request for Quotation</a>
-					</div>`);
+		if(frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0){
+			frappe.call({
+				method: "sabaintegration.overrides.quotation.get_rfq_related_to_quotation",
+				args: {
+					doc_name: frm.doc.name
+				},
+				callback: function(r) {
+					if(r.message.rfq && r.message.rfq.length != 0){					
+						frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+							`<div class="document-link" data-doctype="Request for Quotation">
+								<div class="document-link-badge" data-doctype="Request for Quotation">
+									<span class="count">${r.message.rfq.length}</span>
+									<a class="badge-link" href='/app/request-for-quotation/view/list?name=["in" , [${r.message.rfq.map((r) => {return r.request_for_quotation?'"'+r.request_for_quotation+'"':''})}]]'>Request for Quotation</a>
+							</div>`);
+				}					
 			}
-            
-			});
+			});			
         }
 	}
 });
