@@ -20,6 +20,12 @@ frappe.ui.form.on("Opportunity", {
         
         frm.fields_dict.parent_items.grid.wrapper.find('.grid-download').removeClass('hidden');
         
+        // show download button for every option
+        for ( let i=0; i<frm.all_options.length ; i++){
+            frm.get_docfield(frm.all_options[i]).allow_bulk_edit = 1;
+            cur_frm.get_field(frm.all_options[i]).grid.setup_download();
+        }
+        
     },
     onload(frm){
         if (frm.doc.items) frm.trigger("set_option");
@@ -108,7 +114,7 @@ frappe.ui.form.on("Opportunity", {
         }
     },
     refresh(frm) {
-        set_css(frm);
+        // set_css(frm);
         frm.add_custom_button(__('Request For Quotation New Tab'),
             function() {
                 frm.trigger("make_request_for_quotation_new_tab")
@@ -153,7 +159,8 @@ frappe.ui.form.on("Opportunity", {
         // Only submitted options allowed to create rfq 
         // hiding the buttons when selected option is not submitted
         // Buttons will be visible when document is saved after submitting the selected option
-        frm.trigger("check_selected_option_status")
+        frm.trigger("check_selected_option_status");
+        set_css(frm);
 
     },
     check_selected_option_status: function(frm) { 
@@ -216,6 +223,10 @@ frappe.ui.form.on("Opportunity", {
     check_empty_option: function(frm){
         for (let i=0; i<frm.all_options.length - 1; i++){
             if (frm.fields_dict[frm.all_options[i]].grid.data && frm.fields_dict[frm.all_options[i]].grid.data.length != 0 ){
+                frm.set_df_property(frm.all_options[i+1], 'hidden', 0);
+                frm.set_df_property(frm.all_names[i+1], 'hidden', 0);
+            } 
+            if (frm.fields_dict[frm.all_options[i+1]].grid.data && frm.fields_dict[frm.all_options[i+1]].grid.data.length != 0 ){
                 frm.set_df_property(frm.all_options[i+1], 'hidden', 0);
                 frm.set_df_property(frm.all_names[i+1], 'hidden', 0);
             } 
@@ -351,7 +362,7 @@ frappe.ui.form.on("Opportunity", {
                     if (frappe.user_roles.includes('0 CRM – Opportunity Option Cancellation')) {
                         frm.set_df_property(option_btn_name + '_cancel', 'hidden', 0);
                     }
-                    window.close();
+                    // window.close();
                 }                
             },
             function(){
@@ -371,7 +382,7 @@ frappe.ui.form.on("Opportunity", {
                 // }
                 frm.set_df_property(option_btn_name + '_cancel', 'hidden', 1);
                 frm.set_df_property(option_btn_name + '_submit', 'hidden', 0);
-                window.close();
+                // window.close();
             },
             function(){
             }
@@ -550,6 +561,7 @@ frappe.ui.form.on('Opportunity Option', {
     //     }
     // },
     option_2_add(frm, cdt, cdn) { 
+        
         var child2 = locals[cdt][cdn];
         child2.qty = 1;
         refresh_field("option_2");
@@ -557,6 +569,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name3', 'hidden', 0);
         frm.set_df_property('option2_submit', 'hidden', 0);
         frm.set_df_property('option2_copy', 'hidden', 0);
+        set_css(frm);
        
     },
     option_3_add(frm, cdt, cdn) { 
@@ -567,7 +580,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name4', 'hidden', 0);
         frm.set_df_property('option3_submit', 'hidden', 0);
         frm.set_df_property('option3_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_4_add(frm, cdt, cdn) { 
@@ -578,7 +591,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name5', 'hidden', 0);
         frm.set_df_property('option4_submit', 'hidden', 0);
         frm.set_df_property('option4_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_5_add(frm, cdt, cdn) { 
@@ -589,7 +602,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name6', 'hidden', 0);
         frm.set_df_property('option5_submit', 'hidden', 0);
         frm.set_df_property('option5_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_6_add(frm, cdt, cdn) { 
@@ -600,7 +613,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name7', 'hidden', 0);
         frm.set_df_property('option6_submit', 'hidden', 0);
         frm.set_df_property('option6_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_7_add(frm, cdt, cdn) { 
@@ -611,7 +624,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name8', 'hidden', 0);
         frm.set_df_property('option7_submit', 'hidden', 0);
         frm.set_df_property('option7_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_8_add(frm, cdt, cdn) { 
@@ -622,7 +635,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name9', 'hidden', 0);
         frm.set_df_property('option8_submit', 'hidden', 0);
         frm.set_df_property('option8_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_9_add(frm, cdt, cdn) { 
@@ -633,7 +646,7 @@ frappe.ui.form.on('Opportunity Option', {
         frm.set_df_property('name10', 'hidden', 0);
         frm.set_df_property('option9_submit', 'hidden', 0);
         frm.set_df_property('option9_copy', 'hidden', 0);
-
+        set_css(frm);
         
     },
     option_10_add(frm, cdt, cdn) { 
@@ -642,6 +655,7 @@ frappe.ui.form.on('Opportunity Option', {
         refresh_field("option_10");
         frm.set_df_property('option10_submit', 'hidden', 0);
         frm.set_df_property('option10_copy', 'hidden', 0);
+        set_css(frm);
     },
 });
 
@@ -818,18 +832,24 @@ cur_frm.cscript.item_code = function(doc, cdt, cdn) {
 }
 const set_css = (frm)=>{
     for( var x=1; x<11 ; x++){
+        if($("div[data-fieldname='name"+x+"']").css('display') != "none"){
+            document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("label")[0].style.fontSize = 'large';
+            document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("label")[0].style.fontWeight = 'bold';
+            document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.position = "absolute";
+            document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.top = "-40px";
+            document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.left = "100px";
+
+        }
         //document.querySelectorAll("[data-fieldname='option_"+x+"']")[0].firstChild.style.display = "none";
-        document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("label")[0].style.fontSize = 'large';
-        document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("label")[0].style.fontWeight = 'bold';
-        document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.position = "absolute";
-        document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.top = "-40px";
-        document.querySelectorAll("[data-fieldname='name"+x+"']")[0].getElementsByTagName("input")[0].style.left = "100px";
     }
 
     for( var z=1; z<11 ; z++){
-        document.querySelectorAll("[data-fieldname='option"+z+"_submit']")[0].style.cssFloat = "left" ;
-        document.querySelectorAll("[data-fieldname='option"+z+"_cancel']")[0].style.cssFloat = "left";
-        document.querySelectorAll("[data-fieldname='option"+z+"_copy']")[0].style.cssFloat = "left";
+        if($("div[data-fieldname='name"+x+"']").css('display') != "none"){
+            document.querySelectorAll("[data-fieldname='option"+z+"_submit']")[0].style.cssFloat = "left" ;
+            document.querySelectorAll("[data-fieldname='option"+z+"_cancel']")[0].style.cssFloat = "left";
+            document.querySelectorAll("[data-fieldname='option"+z+"_copy']")[0].style.cssFloat = "left";
+        }
+
     }
     
 }
