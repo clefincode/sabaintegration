@@ -451,7 +451,7 @@ def make_quotation(source_name, target_doc=None):
                                 "rate": total_rate_with_margin,
                                 "rate_without_profit_margin": total_rate,
                                 #"price_list_rate": total_rate_with_margin,
-                                "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100,
+                                "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100 if total_rate else 0,
                                 "opportunity_option_number": row.opportunity_option_number,
                                 "opportunity": row.opportunity,
                                 #"request_for_quotation": request_for_quotation,
@@ -600,3 +600,44 @@ def get_supplier_quotations(doctype, txt, searchfield, start, page_len, filters)
             WHERE docstatus = 1 AND opportunity is not null AND name like '%{txt}%'
             group by name , opportunity            
             """)
+
+@frappe.whitelist()
+def validate_supplier(doc_name , new_supplier):
+    sq_doc = frappe.get_doc("Supplier Quotation" , doc_name)
+    rfq = frappe.get_all(
+            "Supplier Quotation Item",
+            filters={"parent": doc_name},
+            fields=["request_for_quotation"],
+        )
+    if rfq:
+        rfq = rfq[0].request_for_quotation
+        doc = frappe.get_doc("Request for Quotation", rfq)
+        doc_sup = frappe.get_all(
+            "Request for Quotation Supplier",
+            filters={"parent": doc.name, "supplier": new_supplier},
+            fields=["name"],
+        )                
+        doc_sup = doc_sup[0] if doc_sup else None
+        if not doc_sup:
+            return {"supplier_exists": 0 , "request_for_quotation" : rfq}        
+
+@frappe.whitelist()
+def handle_changed_supplier(doc_name , new_supplier , rfq):
+    rfq_doc = frappe.get_doc("Request for Quotation" , rfq)    
+    rfq_doc.cancel()
+
+    amended_doc = frappe.copy_doc(rfq_doc)
+    amended_doc.docstatus = 0
+    amended_doc.amended_from = rfq_doc.name
+    new_suppliers_list = []
+    for supplier in amended_doc.suppliers: 
+        doctype = frappe.new_doc("Request for Quotation Supplier")       
+        values = {
+            "doctype" : "Request for Quotation Supplier" ,
+            "supplier" : new_supplier
+        }
+        doctype.update(values)
+        new_suppliers_list.append(values)    
+    amended_doc.save()
+    amended_doc.update({"suppliers" : new_suppliers_list})
+    amended_doc.submit()

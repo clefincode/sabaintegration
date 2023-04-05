@@ -2,7 +2,22 @@
 {% include 'erpnext/buying/doctype/supplier_quotation/supplier_quotation.js' %};
 
 erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotationController extends erpnext.buying.SupplierQuotationController {
-
+    onload(){
+        if (!this.frm.is_new()) {
+            if (!this.frm.doc.from_selling_price) {
+                this.frm.doc.selling_price_list = ''
+                this.frm.fields_dict["items"].grid.update_docfield_property(
+                    'discount_percentage', 'read_only', 1
+                );
+            }
+            else {
+                this.frm.doc.buying_price_list = ''
+                this.frm.fields_dict["items"].grid.update_docfield_property(
+                    'discount_percentage', 'read_only', 0
+                );
+            }
+        }
+    }
     refresh() {
         var me = this;
         this._super;
@@ -69,8 +84,44 @@ erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotation
             if (!this.frm.is_new())
             this.frm.add_custom_button(__("Set Rates from Another SQ"),
                 () => {this.frm.trigger("set_rates")});
-
         }
+        if(this.frm.$wrapper.find(`.form-documents [data-doctype="Opportunity"]`).length == 0 && this.frm.doc.opportunity){
+            this.frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+                `<div class="document-link" data-doctype="Opportunity">
+                    <div class="document-link-badge" data-doctype="Opportunity">
+                        <span class="count">1</span>
+                        <a class="badge-link" href='/app/opportunity/view/list?name=${this.frm.doc.opportunity}'>Opportunity</a>
+                </div>`);
+        }
+        
+    }
+
+    from_selling_price(){
+        if (!this.frm.doc.from_selling_price) {
+            this.frm.doc.selling_price_list = '';
+            this.frm.doc.buying_price_list = 'Standard Buying';
+            this.frm.refresh_field("buying_price_list");
+            this.frm.set_df_property("selling_price_list", "hidden", 1);
+            this.frm.set_df_property("buying_price_list", "hidden", 0);
+            this.frm.fields_dict["items"].grid.update_docfield_property(
+                'discount_percentage', 'read_only', 1
+            );
+        }
+        else {
+            this.frm.doc.buying_price_list = '';
+            this.frm.doc.selling_price_list = 'Standard Selling';
+            this.frm.refresh_field("selling_price_list");
+            this.frm.set_df_property("selling_price_list", "hidden", 0);
+            this.frm.set_df_property("buying_price_list", "hidden", 1);
+            this.frm.fields_dict["items"].grid.update_docfield_property(
+                'discount_percentage', 'read_only', 0
+            );
+        }
+        this.apply_price_list()
+    }
+
+    selling_price_list(){
+        this.apply_price_list()
     }
 
     make_quotation() {
@@ -170,7 +221,62 @@ erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotation
 
 extend_cscript(cur_frm.cscript, new erpnext.buying.CustomSupplierQuotationController({frm: cur_frm}));
 
+frappe.ui.form.on("Supplier Quotation", { 
+    validate: function(frm){
+        if(frm.is_new()) frappe.model.set_value(frm.doc.doctype, frm.doc.name, 'status', 'Draft');
+    },
+    supplier:function(frm){
+        frm.set_value('change_supplier' , 1)                
+    },  
 
+    change_supplier:function(frm){
+        if(frm.doc.change_supplier == 1 && !frm.is_new()){                       
+            if(frm.doc.supplier){                
+                frappe.call({
+                    method: "sabaintegration.overrides.supplier_quotation.validate_supplier",
+                    args: {                
+                        'doc_name': frm.doc.name,
+                        'new_supplier' : frm.doc.supplier            
+                    },
+                    callback: function(r) {
+                        if(r.message){                       
+                        if(r.message.supplier_exists == 0){
+                            let rfq = r.message.request_for_quotation;
+                            frappe.confirm(
+                                __(`Supplier not found in <b><a href="/app/request-for-quotation/${rfq}">${rfq}</a></b><p> Would you like to change supplier?`),
+                                () => {
+                                        frappe.dom.freeze(__('Processing Please Wait...'));
+                                        frappe.call({                               
+                                            method:"sabaintegration.overrides.supplier_quotation.handle_changed_supplier",
+                                            freeze:true,
+                                            args: {                
+                                                'doc_name': frm.doc.name,
+                                                'new_supplier' : frm.doc.supplier ,
+                                                'rfq':rfq            
+                                            },
+                                            
+                                        }).done(() => {
+                                            frappe.dom.unfreeze();
+                                            setTimeout(() => {
+                                                window.location.reload();
+                                            }, 2000);
+                                            
+                                        });                             
+                                    
+                                }
+                            );                            
+                        }
+                    }
+                        setTimeout(() => {
+                            frm.set_value('change_supplier' , 0)
+                        }, 2000);
+                    }
+                });                
+            }
+        }
+        
+    }  
+}),    
 frappe.ui.form.on("Supplier Quotation Item",{
     item_code: function(frm, cdt, cdn){
         var d = locals[cdt][cdn];
