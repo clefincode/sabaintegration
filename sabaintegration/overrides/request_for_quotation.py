@@ -472,11 +472,10 @@ def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None
 @frappe.whitelist(allow_guest = True)
 def get_quotations_related_to_rfq(doc_name):
     quotations = frappe.db.sql(f"""
-    SELECT `tabQuotation`.name
+    SELECT DISTINCT `tabQuotation`.name
     FROM `tabQuotation` INNER JOIN `tabFrom Supplier Quotation` ON `tabFrom Supplier Quotation`.parent = `tabQuotation`.name
     INNER JOIN `tabRequest for Quotation` ON `tabRequest for Quotation`.name = `tabFrom Supplier Quotation`.request_for_quotation
     WHERE `tabFrom Supplier Quotation`.request_for_quotation = '{doc_name}'
     """ , as_dict = True)
 
-    print(quotations)
     return {"quotations" : quotations}
