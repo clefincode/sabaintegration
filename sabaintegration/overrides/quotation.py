@@ -115,9 +115,9 @@ class CustomQuotation(Quotation):
 		self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
 		self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
 
-		self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs
+		self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs 
 		self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
-		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total
+		self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
 
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return
