@@ -8,6 +8,15 @@ frappe.provide("sabaintegration.costs")
 
 
 frappe.ui.form.on('Quotation', {
+	setup: function(frm){
+		frm.set_query("from_buying_price_list", "items", function(doc, cdt, cdn) {
+			return {
+				filters:{
+					"buying": 1
+				}
+			}
+		});
+	},
 	onload: function(frm){
 		if (frm.doc.option_number_from_opportunity > 0 ){
 			frm.toggle_display('option_number_from_opportunity', true)
@@ -218,6 +227,14 @@ extend_cscript(cur_frm.cscript, new erpnext.selling.CustomQuotationController({f
 
 ////
 frappe.ui.form.on('Quotation Item', {
+	item_code: function(frm,cdt,cdn){
+		var d = locals[cdt][cdn];
+		if (!(d.from_buying_price_list == '' || 
+		d.from_buying_price_list == undefined || 
+		d.from_buying_price_list == 'undifined'))
+			set_buying_rate(frm, d)
+
+	},
 	items_remove: function(frm){
 		frm.trigger("set_total_without_margin");
 		frm.script_manager.trigger("calculate_total_margin");
@@ -231,11 +248,29 @@ frappe.ui.form.on('Quotation Item', {
 	rate: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
 		if (!d.rate_without_profit_margin){
-			d.rate_without_profit_margin = d.price_list_rate
+			if (d.from_buying_price_list == '' || 
+			d.from_buying_price_list == undefined || 
+			d.from_buying_price_list == 'undifined')
+				d.rate_without_profit_margin = d.price_list_rate
+			else {
+				set_buying_rate(frm, d)
+			}
 		}
 		d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
 		frm.trigger("set_total_without_margin");
 		frm.script_manager.trigger("calculate_total_margin");
+	},
+	from_buying_price_list: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		if (d.from_buying_price_list == '' || 
+			d.from_buying_price_list == undefined || 
+			d.from_buying_price_list == 'undifined')
+			d.rate_without_profit_margin = d.price_list_rate
+		else {
+			set_buying_rate(frm, d)
+		}
+		d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
+		frm.refresh_field("items");
 	},
 	qty: function(frm, cdt, cdn){
 		if (frm.doc.supplier_quotations){
@@ -382,4 +417,26 @@ const check_qty = async function(frm, row){
 	})
 	
 	
+}
+
+const set_buying_rate = function(frm, d){
+	/// use get_item_price
+	frappe.call({
+		method: "sabaintegration.stock.get_item_details._get_item_price",
+		args: {
+			item_code: d.item_code,
+			price_list: d.from_buying_price_list,
+			transaction_date: frm.doc.transaction_date,
+			batch_no: d.batch_no
+		},
+		callback: function(r){
+			if (r.message && r.message[0]){
+				let conversion_rate = 1;
+				if (frm.doc.conversion_rate) conversion_rate = frm.doc.conversion_rate
+				d.rate_without_profit_margin = r.message[0][1] / conversion_rate;
+				d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
+				frm.refresh_fields("items")
+			}
+		}
+	})
 }
