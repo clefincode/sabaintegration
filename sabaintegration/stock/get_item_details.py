@@ -841,6 +841,16 @@ def insert_item_price(args):
 					alert=True,
 				)
 
+@frappe.whitelist()
+def _get_item_price(item_code, price_list, batch_no = None, transaction_date=None):
+	item_args = {
+		"uom": frappe.db.get_value("Item", item_code, "stock_uom"),
+		"price_list": price_list,
+		"transaction_date": transaction_date,
+		"batch_no": batch_no
+	}
+	return get_item_price(item_args, item_code)
+
 
 def get_item_price(args, item_code, ignore_party=False):
 	"""

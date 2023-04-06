@@ -106,6 +106,8 @@ erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotation
             this.frm.fields_dict["items"].grid.update_docfield_property(
                 'discount_percentage', 'read_only', 1
             );
+            this.frm.doc.default_discount = 0;
+            this.frm.trigger("default_discount");
         }
         else {
             this.frm.doc.buying_price_list = '';
@@ -217,11 +219,33 @@ erpnext.buying.CustomSupplierQuotationController = class CustomSupplierQuotation
         });
         refresh_field("items");
     }
+    default_discount(frm){
+        $.each(frm.items || [], function(i, d) {
+            frappe.model.set_value(d.doctype, d.name, 'discount_percentage', frm.default_discount)
+        });
+        refresh_field("items");
+    }
 };
 
 extend_cscript(cur_frm.cscript, new erpnext.buying.CustomSupplierQuotationController({frm: cur_frm}));
 
 frappe.ui.form.on("Supplier Quotation", { 
+    onload: function(frm){
+        frm.set_query("buying_price_list", function(doc, cdt, cdn) {
+			return {
+				filters:{
+					"buying": 1
+				}
+			}
+		});
+        frm.set_query("selling_price_list", function(doc, cdt, cdn) {
+			return {
+				filters:{
+					"selling": 1
+				}
+			}
+		});
+    },
     validate: function(frm){
         if(frm.is_new()) frappe.model.set_value(frm.doc.doctype, frm.doc.name, 'status', 'Draft');
     },
@@ -230,12 +254,20 @@ frappe.ui.form.on("Supplier Quotation", {
     },  
 
     change_supplier:function(frm){
-        if(frm.doc.change_supplier == 1 && !frm.is_new()){                       
-            if(frm.doc.supplier){                
+        let doc_name = '' ;
+        if(frm.doc.change_supplier == 1){                       
+            if(frm.doc.supplier){
+                if(frm.is_new()){
+                    if(frm.doc.amended_from){
+                        doc_name = frm.doc.amended_from
+                    }                    
+                }else{
+                    doc_name = frm.doc.name
+                }
                 frappe.call({
                     method: "sabaintegration.overrides.supplier_quotation.validate_supplier",
                     args: {                
-                        'doc_name': frm.doc.name,
+                        'doc_name': doc_name,
                         'new_supplier' : frm.doc.supplier            
                     },
                     callback: function(r) {
@@ -267,12 +299,12 @@ frappe.ui.form.on("Supplier Quotation", {
                             );                            
                         }
                     }
-                        setTimeout(() => {
-                            frm.set_value('change_supplier' , 0)
-                        }, 2000);
                     }
                 });                
             }
+            setTimeout(() => {
+                frm.set_value('change_supplier' , 0)
+            }, 2000);
         }
         
     }  
