@@ -36,7 +36,7 @@ class CustomRequestforQuotation(RequestforQuotation):
     def create_sq_automatically(self):
         if len(self.suppliers) == 1:
             doc = first_supplier_quotation(self.name, for_supplier = self.suppliers[0].supplier, to_save = True)
-            doc.save()
+            doc.save(ignore_permissions = True)
             frappe.db.commit()
             self.reload()
             frappe.msgprint("A Supplier Quotation <a href='/app/supplier-quotation/{0}'><b>{0}</b></a> is created".format(doc.name))
@@ -350,11 +350,10 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None, to
             target_doc.currency = args.currency or get_party_account_currency(
                 "Supplier", for_supplier, source.company
             )
-            target_doc.buying_price_list = args.buying_price_list or frappe.db.get_value(
-                "Buying Settings", None, "buying_price_list"
-            )
+            target_doc.selling_price_list = target_doc.buying_price_list = ''
             if source.opportunity: target_doc.opportunity = source.opportunity
             target_doc.supplier_group = frappe.db.get_value("Supplier", for_supplier, "supplier_group")
+            target_doc.flags.ignore_permissions = True
         set_missing_values(source, target_doc)
 
     doclist = get_mapped_doc(
@@ -372,6 +371,7 @@ def first_supplier_quotation(source_name, target_doc=None, for_supplier=None, to
             },
             target_doc,
             postprocess,
+            ignore_permissions = True
         )
     newitems = doclist.items
     items = frappe.get_doc("Request for Quotation", source_name).items
@@ -417,9 +417,7 @@ def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None
             target_doc.currency = args.currency or get_party_account_currency(
                 "Supplier", for_supplier, source.company
             )
-            target_doc.buying_price_list = args.buying_price_list or frappe.db.get_value(
-                "Buying Settings", None, "buying_price_list"
-            )
+            target_doc.selling_price_list = target_doc.buying_price_list = ''
         if source.opportunity: target_doc.opportunity = source.opportunity
         target_doc.supplier_group = frappe.db.get_value("Supplier", for_supplier, "supplier_group")
         set_missing_values(source, target_doc)
@@ -435,6 +433,7 @@ def not_first_supplier_quotation(source_name, target_doc=None, for_supplier=None
             },
             target_doc,
             postprocess,
+            ignore_permissions = True
         )
     items = frappe.get_doc("Request for Quotation", source_name).packed_items
     items += frappe.get_doc("Request for Quotation", source_name).items

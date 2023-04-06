@@ -125,6 +125,7 @@ class CustomSupplierQuotation(SupplierQuotation):
         then remove items of sq in quotation"""
 
         request_for_quotation = self.get_request_for_quotation()
+        if not request_for_quotation: return
         opportunity, opportunity_option_number = frappe.db.get_value("Request for Quotation Item", {"parent": request_for_quotation, "docstatus": 1}, ["opportunity", "opportunity_option_number"])
         quotation = frappe.db.get_value("Quotation Item", {
             "opportunity": opportunity,
@@ -168,7 +169,7 @@ class CustomSupplierQuotation(SupplierQuotation):
         quote_doc.update_items_table() # remove items that has no packed items in quote
         # if no items has reminded in quotation then delete it
         if not quote_doc.get("items"):
-            quote_doc.delete()
+            quote_doc.delete(ignore_permissions = True)
             frappe.db.commit()
             frappe.msgprint("Quotation <b>{0}</b> is deleted".format(quotation))
             return
@@ -204,7 +205,7 @@ class CustomSupplierQuotation(SupplierQuotation):
         
         if quote_doc.supplier_quotation == self.name: quote_doc.supplier_quotation = ""
         
-        quote_doc.save()
+        quote_doc.save(ignore_permissions = True)
 
         frappe.db.commit()
         frappe.msgprint("Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is updated".format(quotation))
@@ -264,6 +265,7 @@ def make_quotation(source_name, target_doc=None):
         if taxes.get("taxes"):
             target.update(taxes)
 
+        target.flags.ignore_permissions = True
         set_party_details(source, target)
 
     def set_party_details(source, target):
@@ -353,6 +355,7 @@ def make_quotation(source_name, target_doc=None):
                 },
                 target_doc,
                 set_missing_values,
+                ignore_permissions = True
                 )
 
         rfq_doc = frappe.get_doc("Request for Quotation", request_for_quotation)
@@ -512,7 +515,7 @@ def make_quotation(source_name, target_doc=None):
         add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
         
         #if quotation: 
-        doclist.save()
+        doclist.save(ignore_permissions = True)
         
         if copied_opportunity_option:
             frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "in_quotation", 1)
@@ -603,23 +606,24 @@ def get_supplier_quotations(doctype, txt, searchfield, start, page_len, filters)
 
 @frappe.whitelist()
 def validate_supplier(doc_name , new_supplier):
-    sq_doc = frappe.get_doc("Supplier Quotation" , doc_name)
-    rfq = frappe.get_all(
-            "Supplier Quotation Item",
-            filters={"parent": doc_name},
-            fields=["request_for_quotation"],
-        )
-    if rfq:
-        rfq = rfq[0].request_for_quotation
-        doc = frappe.get_doc("Request for Quotation", rfq)
-        doc_sup = frappe.get_all(
-            "Request for Quotation Supplier",
-            filters={"parent": doc.name, "supplier": new_supplier},
-            fields=["name"],
-        )                
-        doc_sup = doc_sup[0] if doc_sup else None
-        if not doc_sup:
-            return {"supplier_exists": 0 , "request_for_quotation" : rfq}        
+    if doc_name and doc_name != '':
+        sq_doc = frappe.get_doc("Supplier Quotation" , doc_name)
+        rfq = frappe.get_all(
+                "Supplier Quotation Item",
+                filters={"parent": doc_name},
+                fields=["request_for_quotation"],
+            )
+        if rfq:
+            rfq = rfq[0].request_for_quotation
+            doc = frappe.get_doc("Request for Quotation", rfq)
+            doc_sup = frappe.get_all(
+                "Request for Quotation Supplier",
+                filters={"parent": doc.name, "supplier": new_supplier},
+                fields=["name"],
+            )                
+            doc_sup = doc_sup[0] if doc_sup else None
+            if not doc_sup:
+                return {"supplier_exists": 0 , "request_for_quotation" : rfq}        
 
 @frappe.whitelist()
 def handle_changed_supplier(doc_name , new_supplier , rfq):
