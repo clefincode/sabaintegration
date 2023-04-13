@@ -333,7 +333,7 @@ const check_change_qty = async function(frm, d){
 					() => {
 						setTimeout(async () => {
 							let packed_items = await get_packed_items(frm, d);
-							if (packed_items) update_packed_items_qty(frm, packed_items, d)					
+							if (packed_items) update_packed_items_qty(frm, packed_items.items, d)					
 							frm.trigger("set_total_without_margin");
 							frm.script_manager.trigger("calculate_total_margin");
 							frappe.dom.unfreeze();
@@ -362,11 +362,8 @@ const get_packed_items = async(frm, row) => {
 	const exists = await frappe.db.get_list("Product Bundle", {filters : {new_item_code: row.item_code}});
 	if (!exists || exists.length == 0) return false;
 
-	const product_bundle = await frappe.db.get_list(
-        "Product Bundle Item", {
-			filters: {parent: exists[0]['name']},
-			fields: ['item_code', 'qty']
-		}
+	const product_bundle = await frappe.db.get_doc(
+        "Product Bundle", exists[0]['name']
     );
 
     return product_bundle
