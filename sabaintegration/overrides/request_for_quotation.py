@@ -37,7 +37,7 @@ class CustomRequestforQuotation(RequestforQuotation):
         if len(self.suppliers) == 1:
             doc = first_supplier_quotation(self.name, for_supplier = self.suppliers[0].supplier, to_save = True)
             doc.save(ignore_permissions = True)
-            frappe.db.commit()
+            #frappe.db.commit()
             self.reload()
             frappe.msgprint("A Supplier Quotation <a href='/app/supplier-quotation/{0}'><b>{0}</b></a> is created".format(doc.name))
 
@@ -54,7 +54,7 @@ class CustomRequestforQuotation(RequestforQuotation):
         )      
         if supplier_quotation:
             frappe.get_doc('Supplier Quotation' , supplier_quotation[0].name).delete()
-            frappe.db.commit()                    
+            #frappe.db.commit()                    
     
     def after_delete(self):
         if self.docstatus == 0:
@@ -65,7 +65,7 @@ class CustomRequestforQuotation(RequestforQuotation):
         if copied_option:
             doc = frappe.get_doc("Copied Opportunity Option", copied_option[0]["name"])
             doc.delete()
-            frappe.db.commit()
+            #frappe.db.commit()
 
     def validate_bundle_items(self):
         """Check if product bundle item that is in items table 
@@ -126,8 +126,8 @@ class CustomRequestforQuotation(RequestforQuotation):
             copied_option.opportunity = self.opportunity
             copied_option.option_number = option_number
             copied_option.request_for_quotation = self.name
-            copied_option.insert()
-            frappe.db.commit()
+            copied_option.insert(ignore_permissions = True)
+            #frappe.db.commit()
 
     # def autoname(self):
         ###If this rfq is coming from an opportunity option,
