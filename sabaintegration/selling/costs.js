@@ -3,6 +3,7 @@ frappe.provide("sabaintegration.costs")
 
 $.extend(sabaintegration, {
     set_cost_value(){
+        if (cur_frm.doc.costs == undefined) return;
         for (let row of cur_frm.doc.costs){
             row.cost_value = cur_frm.doc.net_total * row.cost_percentage / 100;
             row.base_cost_value = row.cost_value * cur_frm.doc.conversion_rate;
@@ -17,8 +18,11 @@ $.extend(sabaintegration, {
     update_total_cost(){
         let costs_table = cur_frm.doc.costs;
         let total_costs = 0.00;
-        for (let row of costs_table){
-            total_costs += row.cost_value;
+        if (cur_frm.doc.costs !== undefined) 
+        {
+            for (let row of costs_table){
+                total_costs += row.cost_value;
+            }
         }
         cur_frm.doc.total_costs = total_costs;
         cur_frm.doc.base_total_costs = total_costs * cur_frm.doc.conversion_rate;
