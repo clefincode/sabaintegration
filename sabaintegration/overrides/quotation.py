@@ -48,23 +48,29 @@ class CustomQuotation(Quotation):
 		self.update_total_margin()
 		self.update_costs()
 		self.set_option_number()
+		
+		# sort quotation items as opportunity items
+		if self.option_number_from_opportunity:
+			self.sort_items(self.option_number_from_opportunity)	
 
 		if self.is_new():
-			self.set_title()
+			self.set_title()	
 
-	def after_insert(self):
-		self.assign_quote()
 	
-	def assign_quote(self):
-		if check_if_from_opportunity_option(self):
-			opportunity = self.supplier_quotations[0].get("opportunity")
-			if opportunity :
-				user = frappe.db.get_value("Opportunity", opportunity, "opportunity_owner")
-				from frappe.desk.form.assign_to import add
-				try:
-					add({"doctype": self.doctype, "name": self.name, "assign_to": [user]})
-				except Exception:
-					frappe.msgprint("Couldn't assign the quotation to its sales man")
+
+	# def after_insert(self):
+	# 	self.assign_quote()
+	
+	# def assign_quote(self):
+	# 	if check_if_from_opportunity_option(self):
+	# 		opportunity = self.supplier_quotations[0].get("opportunity")
+	# 		if opportunity :
+	# 			user = frappe.db.get_value("Opportunity", opportunity, "opportunity_owner")
+	# 			from frappe.desk.form.assign_to import add
+	# 			try:
+	# 				add({"doctype": self.doctype, "name": self.name, "assign_to": [user]})
+	# 			except Exception:
+	# 				frappe.msgprint("Couldn't assign the quotation to its sales man")
 
 	def add_item_name_in_packed(self):
 		for item_row in self.get("items"):
@@ -122,9 +128,13 @@ class CustomQuotation(Quotation):
 	def set_option_number(self):
 		if self.option_number_from_opportunity: return
 
-		opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
-		if opportunity_option:
-			self.option_number_from_opportunity =opportunity_option
+		for item in self.items:
+			if item.opportunity_option_number:
+				self.option_number_from_opportunity = item.opportunity_option_number
+				break
+		# opportunity_option = frappe.db.get_value("Quotation Item", {"parent": self.name}, "opportunity_option_number")
+		# if opportunity_option:
+		# 	self.option_number_from_opportunity =opportunity_option
 	
 	def set_title(self):
 		if self.supplier_quotations:
@@ -187,6 +197,38 @@ class CustomQuotation(Quotation):
 					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
 					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
 	
+	def sort_items(self , opportunity_option_number):
+		doc_before_save = self.get_doc_before_save()
+
+		if doc_before_save:
+			items_before_save = [[item.item_code, item.section_title] for item in doc_before_save.get("items")]
+			items_after_save = [[item.item_code, item.section_title] for item in self.get("items")]
+			reset_table = items_before_save != items_after_save
+		if not reset_table: return
+
+		opportunity_items = frappe.db.get_all("Opportunity Option", {"parent": self.opportunity, "parentfield": "option_"+str(opportunity_option_number)}, ["item_code", "qty", "section_title"] , order_by = "idx")
+		quotation_items_new_list = []
+		c = 0
+		for item in opportunity_items:
+			for i in self.items:
+				if item.item_code == i.item_code and item.section_title == i.section_title:
+					c = c+1
+					i.update({"idx" : c})
+					quotation_items_new_list.append(i)
+		idx = len(quotation_items_new_list) + 1
+		for i in self.items:
+			found = False
+			for item in quotation_items_new_list:
+				if item.item_code == i.item_code and item.section_title == i.section_title:
+					found = True
+					break
+			if not found:
+				i.idx = idx
+				quotation_items_new_list.append(i)
+				idx += 1
+		
+		self.update({"items": quotation_items_new_list})
+
 	def on_trash(self):
 		remove_quote_from_copied_option(self.name)
 

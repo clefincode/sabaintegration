@@ -14,7 +14,6 @@ from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_ite
 from erpnext.accounts.party import get_party_account_currency
 from erpnext.setup.utils import get_exchange_rate
 
-from sabaintegration.overrides.opportunity import add_item_to_table
 class CustomSupplierQuotation(SupplierQuotation):
     def validate(self):
         super(CustomSupplierQuotation, self).validate()
@@ -187,7 +186,7 @@ class CustomSupplierQuotation(SupplierQuotation):
                     packed_items.remove(packed_item)
             item.rate = rate
             item.rate_without_profit_margin = rate_without_margin
-            item.margin_from_supplier_quotation = (rate - rate_without_margin) / rate_without_margin * 100
+            item.margin_from_supplier_quotation = (rate - rate_without_margin) / rate_without_margin * 100 if rate_without_margin else 0.00
             # to prevent assigning rate with price list rate when saving quote
             if item.price_list_rate > item.rate:
                 item.margin_rate_or_amount = 0
@@ -246,7 +245,8 @@ def has_supplier_quotation_to_create(request_for_quotation):
         return True
 
 @frappe.whitelist()
-def make_quotation(source_name, target_doc=None):
+def make_quotation(source_name, target_doc=None):   
+    from sabaintegration.overrides.opportunity import add_item_to_table
     def set_missing_values(source, target):
         from erpnext.controllers.accounts_controller import get_default_taxes_and_charges
         from erpnext import get_company_currency
@@ -515,20 +515,27 @@ def make_quotation(source_name, target_doc=None):
         add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
         
         #if quotation: 
-        doclist.save(ignore_permissions = True)
+        #doclist.save(ignore_permissions = True)
         
         if copied_opportunity_option:
             frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "in_quotation", 1)
             frappe.db.set_value("Copied Opportunity Option", copied_opportunity_option[0]["name"], "quotation", doclist.name)
+
+        # sort quotation items as opportunity items
+        if opportunity_option_number:
+            doclist.option_number_from_opportunity = opportunity_option_number
+            doclist.sort_items(opportunity_option_number)
+        doclist.save(ignore_permissions = True)
         msg = ""
         if not quotation:
-            msg = "Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is created".format(doclist.name) 
+            msg = "Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is created".format(doclist.name)
         else:
             msg = "Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is updated".format(doclist.name)
         frappe.msgprint(msg)
         return doclist
 
 def add_packed_item(item, qty, opp_row, conversion_rate, doclist):
+    from sabaintegration.overrides.opportunity import add_item_to_table
     packed_item = deepcopy(item)
     precision = item.precision("qty")
     packed_item.qty = flt(qty, precision)
