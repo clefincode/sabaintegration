@@ -204,7 +204,7 @@ class CustomQuotation(Quotation):
 			items_before_save = [[item.item_code, item.section_title] for item in doc_before_save.get("items")]
 			items_after_save = [[item.item_code, item.section_title] for item in self.get("items")]
 			reset_table = items_before_save != items_after_save
-		if not reset_table: return
+			if not reset_table: return
 
 		opportunity_items = frappe.db.get_all("Opportunity Option", {"parent": self.opportunity, "parentfield": "option_"+str(opportunity_option_number)}, ["item_code", "qty", "section_title"] , order_by = "idx")
 		quotation_items_new_list = []
@@ -412,7 +412,8 @@ def check_qty(opportunity, option_number, item_code, qty, section_title = None):
 		strquery += "and section_title = '{}'".format(section_title)
 
 	option_qty = frappe.db.sql(strquery, as_list = 1)
-	return flt(option_qty[0][0]) == flt(qty)
+	if option_qty: return flt(option_qty[0][0]) == flt(qty)
+	else: return 
 
 
 @frappe.whitelist()
