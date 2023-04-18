@@ -2,6 +2,24 @@ frappe.provide("sabaintegration");
 frappe.provide("sabaintegration.costs")
 
 $.extend(sabaintegration, {
+    set_total_without_margin: function(frm){
+		let total = 0;
+		$.each(frm.doc.items || [], function(i, d) {
+			total = total + (d.rate_without_profit_margin * d.qty);
+		});
+		frm.doc.total_rate_without_margin = total;
+		frm.refresh_field("total_rate_without_margin");
+
+	},
+    calculate_total_margin: function(frm){
+		cur_frm.cscript.calculate_taxes_and_totals();
+		frm.doc.total_margin = (frm.doc.total - frm.doc.total_rate_without_margin) / frm.doc.total_rate_without_margin * 100;
+		frm.doc.total_items_markup_value = frm.doc.total - frm.doc.total_rate_without_margin
+		frm.doc.base_total_items_markup_value = frm.doc.total_items_markup_value * frm.doc.conversion_rate;
+		
+		sabaintegration.set_cost_value()
+		sabaintegration.update_costs()
+	},
     set_cost_value(){
         if (cur_frm.doc.costs == undefined) return;
         for (let row of cur_frm.doc.costs){
