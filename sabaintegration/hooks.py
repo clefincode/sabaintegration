@@ -90,9 +90,9 @@ doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quot
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"ToDo": "sabaintegration.www.permissions.query_condition_for_todo"
-# }
+permission_query_conditions = {
+	"Quotation": "sabaintegration.www.permissions.quotation_query"
+}
 #
 # has_permission = {
 #  	"Event": "sabaintegration.www.permissions.has_permission",
@@ -112,6 +112,8 @@ override_doctype_class = {
 	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
 	'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
 	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry'
+    # 'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
+    # 'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder'
 }
 
 # Document Events
