@@ -8,6 +8,7 @@ from copy import deepcopy
 import frappe
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
+from frappe.utils import now
 
 from erpnext.accounts.party import get_party_account_currency, get_party_details
 from erpnext.stock.doctype.material_request.material_request import set_missing_values
@@ -24,6 +25,8 @@ class CustomRequestforQuotation(RequestforQuotation):
             self.create_copied_option()
             self.set_title()
         self.validate_bundle_items()
+        if self.get("_action") and self._action == 'submit':
+            self.submitting_date = now()
     
     def on_submit(self):
         frappe.db.set(self, "status", "Submitted")

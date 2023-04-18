@@ -8,6 +8,7 @@
   "section_title",
   "item_code",
   "option_number",
+  "submitting_date",
   "col_break1",
   "qty",
   "item_group",
@@ -117,9 +118,9 @@
    "print_hide": 1
   },
   {
-    "fieldname": "section_break_7",
-    "fieldtype": "Section Break"
-   },
+   "fieldname": "section_break_7",
+   "fieldtype": "Section Break"
+  },
   {
    "fieldname": "base_rate",
    "fieldtype": "Currency",
@@ -130,32 +131,32 @@
    "print_hide": 1
   },
   {
-    "fieldname": "base_amount",
-    "fieldtype": "Currency",
-    "label": "Base Amount",
-    "options": "Company:company:default_currency",
-    "print_hide": 1
-   },
-   {
-    "fieldname": "column_break_9",
-    "fieldtype": "Column Break"
-   },
-   {
-    "fieldname": "rate",
-    "fieldtype": "Currency",
-    "label": "Rate",
-    "oldfieldname": "rate",
-    "options": "currency",
-    "print_hide": 1
-   },
-   {
-    "fieldname": "amount",
-    "fieldtype": "Currency",
-    "label": "Amount",
-    "oldfieldname": "amount",
-    "options": "currency",
-    "print_hide": 1
-   },
+   "fieldname": "base_amount",
+   "fieldtype": "Currency",
+   "label": "Base Amount",
+   "options": "Company:company:default_currency",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "column_break_9",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate",
+   "fieldtype": "Currency",
+   "label": "Rate",
+   "oldfieldname": "rate",
+   "options": "currency",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "oldfieldname": "amount",
+   "options": "currency",
+   "print_hide": 1
+  },
   {
    "fieldname": "section_title",
    "fieldtype": "Data",
@@ -174,11 +175,17 @@
    "fieldtype": "Link",
    "label": "Warehouse",
    "options": "Warehouse"
+  },
+  {
+   "fieldname": "submitting_date",
+   "fieldtype": "Datetime",
+   "hidden": 1,
+   "label": "Submitting Date"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2022-12-26 11:11:54.540873",
+ "modified": "2023-04-17 10:43:57.321322",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Opportunity Option",
@@ -186,5 +193,6 @@
  "permissions": [],
  "sort_field": "modified",
  "sort_order": "DESC",
+ "states": [],
  "track_changes": 1
 }

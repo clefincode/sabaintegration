@@ -4,7 +4,7 @@
 import copy
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, now
 from erpnext.selling.doctype.quotation.quotation import Quotation
 
 class CustomQuotation(Quotation):
@@ -55,6 +55,8 @@ class CustomQuotation(Quotation):
 
 		if self.is_new():
 			self.set_title()	
+		if self.get("_action") and self._action == 'submit':
+			self.submitting_date = now()
 
 	
 
