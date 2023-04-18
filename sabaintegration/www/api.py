@@ -6,58 +6,57 @@ from frappe.model.mapper import get_mapped_doc
 from frappe.model.naming import make_autoname
 from erpnext.selling.doctype.sales_order.sales_order import is_product_bundle, set_delivery_date
 
-from sabaintegration.overrides.opportunity import group_similar_items, add_item_to_table
 
 @frappe.whitelist()
 def product_bundle_check_sales_order(item):
-    doc = frappe.db.get_list('Sales Order Item',
-    filters={
-        'item_code': item,
-        "docstatus": ("!=", 2)
-    },
-    pluck='name'
-    )
-    
-    if(doc):
-        frappe.msgprint('This product Bundle is used in Sales Order and can not be edited.')
-        return doc
+	doc = frappe.db.get_list('Sales Order Item',
+	filters={
+		'item_code': item,
+		"docstatus": ("!=", 2)
+	},
+	pluck='name'
+	)
+	
+	if(doc):
+		frappe.msgprint('This product Bundle is used in Sales Order and can not be edited.')
+		return doc
 
 @frappe.whitelist()
 def product_bundle_prevents(item):
-    doc = frappe.db.get_list('Product Bundle',
-    filters={
-        'new_item_code': item
-    },
-    pluck='name'
-    )
-    if(doc):
-        frappe.msgprint('There is a product bundle for this item ')
-        return doc
-    doc1 = frappe.db.get_list('Product Bundle Item',
-    filters={
-        'item_code': item
-    },
-    pluck='name'
-    )
-    
-    if(doc1):
-        frappe.msgprint('There is a product bundle item that includes this one as a child')
-        return doc1
+	doc = frappe.db.get_list('Product Bundle',
+	filters={
+		'new_item_code': item
+	},
+	pluck='name'
+	)
+	if(doc):
+		frappe.msgprint('There is a product bundle for this item ')
+		return doc
+	doc1 = frappe.db.get_list('Product Bundle Item',
+	filters={
+		'item_code': item
+	},
+	pluck='name'
+	)
+	
+	if(doc1):
+		frappe.msgprint('There is a product bundle item that includes this one as a child')
+		return doc1
 
 
 
 @frappe.whitelist()
 def product_bundle_item_prevents(item):
-    doc = frappe.db.get_list('Product Bundle',
-    filters={
-        'new_item_code': item
-    },
-    pluck='name'
-    )
-    
-    if(doc):
-        frappe.msgprint('There is a product bundle for this item you selected as a child')
-        return doc
+	doc = frappe.db.get_list('Product Bundle',
+	filters={
+		'new_item_code': item
+	},
+	pluck='name'
+	)
+	
+	if(doc):
+		frappe.msgprint('There is a product bundle for this item you selected as a child')
+		return doc
 
 
 ###This method is overrided from erpnext's Sales Order
@@ -367,6 +366,7 @@ def make_material_request(source_name, target_doc=None):
 
 @frappe.whitelist()
 def add_items_to_option(opplist, process=False):
+	from sabaintegration.overrides.opportunity import add_item_to_table
 	if not process: return
 	if isinstance(opplist, string_types):
 		opplist = json.loads(opplist)
@@ -510,3 +510,139 @@ def opp_sales_man_to_opp_owner():
 	where sales_man != ""
 	""", as_dict = 1)  
 	return opps
+
+def amend_rfq(doc):
+	newdoc = frappe.copy_doc(doc)
+	if doc.docstatus == 0:
+		doc.delete(ignore_permissions = True)
+	else:
+		if frappe.db.exists('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}):
+			SQs = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}, 'parent', distinct = 1)
+			for sq in SQs:
+				sq_doc = frappe.get_doc('Supplier Quotation', sq.parent)
+				sq_doc.cancel()
+		newdoc.amended_from = doc.name
+		doc.cancel()
+	return newdoc
+
+def replace_item_with_item(doc, item_code, new_item_code, option_number, added_packed):
+	from erpnext.stock.doctype.packed_item.packed_item import is_product_bundle, get_product_bundle_items
+
+	itemslist, replaced_item = [], None
+	item_code_bundle = is_product_bundle(item_code)
+	new_item_code_bundle = is_product_bundle(new_item_code)
+	for item in doc.items:
+		if item.item_code != item_code:
+			itemslist.append(item)
+		elif item.item_code == item_code:
+			replaced_item = item
+			if not new_item_code_bundle and new_item_code == added_packed: continue
+			qty = None
+			if not new_item_code_bundle and item_code_bundle:
+				qty = frappe.db.sql("""
+				select sum(qty)
+				from `tabOpportunity Option` 
+				where parent = '{0}' and parentfield = 'option_{1}' 
+				and item_code = '{2}'
+				group by item_code
+				""".format(doc.opportunity, option_number, new_item_code))
+			rfqitem = frappe.new_doc("Request for Quotation Item")
+			fields = {
+			"item_code":new_item_code,
+			"item_name":frappe.db.get_value("Item", new_item_code, "item_name"),
+			"qty": qty[0][0] if qty else item.get("qty"),
+			"uom":frappe.db.get_value("Item", new_item_code, "stock_uom"),
+			"warehouse":frappe.db.get_value("Item Default", {"parent" : new_item_code}, "default_warehouse") or item.get('warehouse'),
+			"description":frappe.db.get_value("Item", new_item_code, "description"),
+			"brand": frappe.db.get_value("Item", new_item_code, "brand"),
+			"opportunity": item.get("opportunity"),
+			"opportunity_option_number": item.get("opportunity_option_number"),
+			"conversion_factor": 1
+			}
+			rfqitem.update(fields)
+			itemslist.append(rfqitem)
+			if new_item_code_bundle and not item_code_bundle: added_packed = new_item_code
+	
+	doc.update({"items": itemslist})
+
+	if not item_code_bundle and not new_item_code_bundle: 
+		return 
+
+	if not doc.get("packed_items") and not item_code_bundle and new_item_code_bundle:
+		packed_items = get_product_bundle_items(new_item_code)
+		packinglist = []
+		for p_item in packed_items:
+			packinglist.append({
+				"item_code": p_item.item_code,
+				"qty": p_item.qty * replaced_item.qty,
+				"description": p_item.description,
+				"uom": p_item.uom,
+				"warehouse": frappe.db.get_value("Item Default", {"parent" : item.get("item_code")}, "default_warehouse"),
+				"brand": frappe.db.get_value("Item", p_item.item_code, "brand")
+			})
+		doc.update({"packed_items": packinglist})
+		return
+	elif doc.get("packed_items") and not item_code_bundle and new_item_code_bundle:
+		packed_items = get_product_bundle_items(new_item_code)
+		for p_item in packed_items:
+			found = False
+			for packed in doc.packed_items:
+				if packed.item_code == p_item.item_code:
+					packed.qty += p_item.qty * replaced_item.qty
+					found = True
+					break
+			if not found:
+				doc.append("packed_items", {
+				"item_code": p_item.item_code,
+				"qty": p_item.qty * replaced_item.qty,
+				"description": p_item.description,
+				"uom": p_item.uom,
+				"warehouse": frappe.db.get_value("Item Default", {"parent" : item.get("item_code")}, "default_warehouse"),
+				"brand": frappe.db.get_value("Item", p_item.item_code, "brand")
+			})
+
+	elif doc.get("packed_items") and item_code_bundle:
+		packed_items = get_product_bundle_items(item_code)
+		new_packed_items = None
+		if new_item_code_bundle:
+			new_packed_items = get_product_bundle_items(new_item_code)
+		
+		packinglist = []
+		for packed in doc.packed_items:
+			for p_item in packed_items:
+				if p_item.item_code == packed.item_code:
+					packed.qty -= p_item.qty * replaced_item.qty
+					break
+			if not new_packed_items and packed.qty > 0: packinglist.append(packed)
+			else: packinglist.append(packed)
+		packinglist_update = []
+		if new_packed_items:
+			for packed in packinglist:
+				for np_item in new_packed_items:
+					if np_item.item_code == packed.item_code:
+						packed.qty += np_item.qty * replaced_item.qty
+						added_packed.append(np_item.item_code)
+						break
+				if packed.qty > 0:
+					packinglist_update.append(packed)
+		else: packinglist_update = packinglist
+		doc.update({"packed_items": packinglist_update})
+		return added_packed
+
+def create_rfq_if_necessary(new_item_code, item_code, added_packed, opportunity, option_number):
+	from erpnext.stock.doctype.packed_item.packed_item import is_product_bundle, get_product_bundle_items
+	from sabaintegration.overrides.opportunity import make_request_for_quotation
+
+	selected_option = frappe.db.get_value("Opportunity", opportunity, "selected_option")
+	if str(selected_option) == option_number and is_product_bundle(new_item_code):
+		added_packed = list(set(added_packed))
+		packed_items = get_product_bundle_items(new_item_code)
+		if len(packed_items) > len(added_packed):
+			return make_request_for_quotation(opportunity)
+	return None
+
+def create_sqs_if_necessary(new_s_rfqs):
+	for rfq in new_s_rfqs:
+		if frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": rfq.name}):
+			continue
+		rfq.create_sq_automatically()

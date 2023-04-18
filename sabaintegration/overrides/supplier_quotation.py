@@ -19,20 +19,20 @@ class CustomSupplierQuotation(SupplierQuotation):
         super(CustomSupplierQuotation, self).validate()
         if self.is_new():
             self.set_title()
-            self.set_rfg_status()
+            self.set_rfq_status('Converted to Supplier Quotation')
         elif self.get("_action") and self._action == 'submit':
             self.submitting_date = now()
 
     def after_insert(self):
         self.reload()
 
-    def set_rfg_status(self):
+    def set_rfq_status(self, status):
         for item in self.items:
             if item.request_for_quotation:
-                frappe.db.set_value('Request for Quotation', item.request_for_quotation, 'status', 'Converted to Supplier Quotation')
                 doc = frappe.get_doc('Request for Quotation', item.request_for_quotation)
+                if doc.docstatus == 2: return
+                frappe.db.set_value('Request for Quotation', item.request_for_quotation, 'status', status)
                 
-                frappe.db.commit()
                 doc.reload()
                 break
 
@@ -54,7 +54,12 @@ class CustomSupplierQuotation(SupplierQuotation):
     
     def on_cancel(self):
         super(CustomSupplierQuotation, self).on_cancel()
+        self.set_rfq_status("Submitted")
         self.update_quotation()
+
+    def after_delete(self):
+        if self.docstatus == 0:
+            self.set_rfq_status("Submitted")
 
     def get_request_for_quotation(self):
         for item in self.items:

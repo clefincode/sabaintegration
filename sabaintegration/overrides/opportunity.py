@@ -11,6 +11,8 @@ from erpnext.crm.doctype.opportunity.opportunity import Opportunity
 
 
 from sabaintegration.stock.get_item_details import get_item_warehouse
+from sabaintegration.www.api import create_rfq_if_necessary, amend_rfq, replace_item_with_item, create_sqs_if_necessary
+from sabaintegration.overrides.supplier_quotation import set_rates
 
 class CustomOpportunity(Opportunity):
     @frappe.whitelist()
@@ -319,8 +321,8 @@ def make_request_for_quotation(source_name, target_doc=None):
         item.description, item.brand, item.image, item.parent, item.option_number
         #, rfqi.qty as r_qty
         from `tabOpportunity Item` as item 
-        left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number
         left outer join `tabProduct Bundle` as pd on item.item_code = pd.new_item_code
+        left outer join `tabRequest for Quotation Item` as rfqi on item.item_code = rfqi.item_code and rfqi.opportunity = item.parent and rfqi.opportunity_option_number = item.option_number and rfqi.docstatus != 2
         where  item.parent = '{}' and pd.new_item_code is null and
         (rfqi.item_code is null or (rfqi.qty is not null and rfqi.qty < item.qty and rfqi.docstatus != 2))
         """.format(source_name), as_dict = 1)
@@ -329,9 +331,11 @@ def make_request_for_quotation(source_name, target_doc=None):
             qtys = frappe.db.get_all("Request for Quotation Item", {
                 "opportunity": source_name, 
                 "opportunity_option_number": item.option_number,
-                "item_code": item.item_code
-                }, "qty")
+                "item_code": item.item_code,
+                "docstatus": ("!=", 2)
+                }, ["parent","qty"])
             total_qty = 0
+            
             for row in qtys:
                 total_qty += row.qty
             item.qty = item.qty - total_qty
@@ -408,3 +412,97 @@ def group_similar_items(items, company= None):
         })
         
     return groupeditems
+
+@frappe.whitelist()
+def replace_item(args, opp_doc):
+    args = json.loads(args)
+    opp_doc = json.loads(opp_doc)
+    opp = frappe.get_doc("Opportunity", args['opportunity'])
+
+    opp.update({
+        "option_"+args['option_number']: opp_doc["option_"+ args['option_number']]
+    })
+    opp.save()
+    opp.reload()
+    # Replaced Item in at least one Request
+    if frappe.db.exists("Request for Quotation Item", {
+        'item_code': args["item_code"], 
+        'opportunity': args["opportunity"],
+        'opportunity_option_number': args["option_number"],
+        'docstatus': ('!=', 2)}):
+        update_SQs(args)
+        doc = update_RFQs(args)
+
+    frappe.db.commit()
+    if doc: return doc
+        
+
+def update_SQs(args):
+    item_code = args.get("item_code")
+    opportunity, option_number = args.get("opportunity"), args.get("option_number")
+    RFQs = frappe.db.get_all("Request for Quotation Item", {
+        'item_code': item_code, 
+        'opportunity': opportunity,
+        'opportunity_option_number': option_number,
+        'docstatus': 1
+        }, 'parent', distinct = 1)
+    RFQs = [i.parent for i in RFQs]
+    SQs = frappe.db.get_all('Supplier Quotation Item', {
+        'request_for_quotation': ('in', RFQs),
+        'docstatus': 1
+        }, 'parent', distinct = 1)
+    for SQuote in SQs:
+        doc = frappe.get_doc('Supplier Quotation', SQuote.parent)
+        rfq = doc.items[0].get('request_for_quotation')
+        rfq_doc = frappe.get_doc('Request for Quotation', rfq)
+        if not rfq: continue
+        
+        toupdate = False
+        for item in rfq_doc.items:
+            if item.item_code == item_code:
+                toupdate = True
+                break
+        if not toupdate: continue
+
+        doc.cancel()
+
+def update_RFQs(args):
+    from erpnext.stock.doctype.packed_item.packed_item import is_product_bundle
+    item_code = args.get("item_code")
+    new_item_code = args.get("new_item_code")
+    opportunity, option_number = args.get("opportunity"), args.get("option_number")
+    RFQs = frappe.db.get_all("Request for Quotation Item", {
+        'item_code': item_code,
+        'opportunity': opportunity,
+        'opportunity_option_number': option_number,
+        'docstatus': ('!=', 2)
+    }, 'parent', distinct = 1)
+    added_packed = []
+    new_s_rfqs = []
+    for rfq in RFQs:
+        SQs = []
+        rfq_doc = frappe.get_doc('Request for Quotation', rfq.parent)
+        tosubmit = 1 if rfq_doc.docstatus == 1 else 0
+        if tosubmit: 
+            SQs = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': rfq.parent, "docstatus": 1}, 'parent', distinct = 1)
+        new_rfq = amend_rfq(rfq_doc)
+        new_added_packed = replace_item_with_item(new_rfq, item_code, new_item_code, option_number, added_packed)
+        if isinstance(new_added_packed, string_types):
+            added_packed = new_added_packed
+
+        inserted = False
+        if not is_product_bundle(new_item_code) or (is_product_bundle(new_item_code) and\
+        (len(new_rfq.items) == 1 and new_rfq.get("packed_items")) or\
+        len(new_rfq.items) > 1):
+            new_rfq.insert(ignore_permissions = True)
+            inserted = True
+        if tosubmit and SQs:
+            for sq in SQs:
+                sqdoc = frappe.get_doc("Supplier Quotation", sq.parent)
+                if sqdoc.docstatus == 1: sqdoc.cancel()
+        if tosubmit and inserted: 
+            new_rfq.submit()
+            new_s_rfqs.append(new_rfq)
+    create_sqs_if_necessary(new_s_rfqs)
+    return create_rfq_if_necessary(new_item_code, item_code, added_packed, opportunity, option_number)
+         

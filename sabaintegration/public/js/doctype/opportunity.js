@@ -115,6 +115,10 @@ frappe.ui.form.on("Opportunity", {
     },
     refresh(frm) {
         // set_css(frm);
+        frm.add_custom_button(__('Update Option Items'),
+            function() {
+                frm.trigger("update_option_items")
+            });
         frm.add_custom_button(__('Request For Quotation New Tab'),
             function() {
                 frm.trigger("make_request_for_quotation_new_tab")
@@ -197,6 +201,75 @@ frappe.ui.form.on("Opportunity", {
 			frm: frm
 		})
 	},
+    update_option_items: function(frm){
+        var dialog = new frappe.ui.Dialog({
+			title: __("Replace Item with Another One"),
+			fields: [
+                    {
+                        "fieldtype": "Data",
+                        "label": __("Option Number"),
+                        "fieldname": "option_number",
+                        "reqd": 1,
+                    },
+				    {
+                        "fieldtype": "Link",
+                        "label": __("Item to be Replaced"),
+                        "fieldname": "item_code",
+                        "options": 'Item',
+                        "reqd": 1,
+                        get_query: function(){
+                            let option_number = cur_dialog.fields_dict.option_number.value;
+                            if (option_number && option_number !== 'undefined' && option_number !== undefined && option_number != null)
+                                return {
+                                    filters: [
+                                        ["Item", "name", "in", frm.fields_dict["option_"+option_number].grid.data.map((row) => {return row.item_code;})]
+                                    ]
+                                }
+                            else return
+                        }
+				    },
+                    {
+                        "fieldtype": "Link",
+                        "label": __("The New Item"),
+                        "fieldname": "new_item_code",
+                        "options": 'Item',
+                        "reqd": 1,
+                    }
+			    ],
+			primary_action_label: __("Submit"),
+			primary_action: async (args) => {
+				if(!args) return;
+				dialog.hide();
+                args['opportunity'] = frm.doc.name;
+                let option_number = args['option_number']
+                let rows = frm.fields_dict['option_'+option_number].grid.data
+                for (let row of rows){
+                    if (row.item_code == args['item_code']){
+                        await frappe.model.set_value(row.doctype, row.name, "item_code", args["new_item_code"])
+                    }
+                }
+				return frappe.call({
+					type: "POST",
+					method: "sabaintegration.overrides.opportunity.replace_item",
+					args: {args: args, opp_doc:cur_frm.doc},
+					freeze: true,
+					callback: function(r) {
+						if(!r.exc && r.message) {
+                            frappe.msgprint("Replacing item is Done")
+                            var doc = frappe.model.sync(r.message);
+                            frappe.set_route("Form", r.message.doctype, r.message.name);
+                        }
+                        else if (!r.message) {
+                            frappe.msgprint("Replacing item is Done")
+                            frm.reload_doc()
+                        }
+					}
+				});
+			}
+		});
+
+		dialog.show()
+    },
     make_request_for_quotation_new_tab: function(frm) {
         var theWindow =  window.open(frm.docname,"_blank"),
         theDoc = theWindow.document,
@@ -359,6 +432,12 @@ frappe.ui.form.on("Opportunity", {
                     
                     let option_btn_name = option.replace('_','');
                     frm.set_df_property(option_btn_name + '_submit', 'hidden', 1);
+                    frm.fields_dict[option].grid.data.forEach(                        
+                        function(el){
+                            if (el.submitting_date == undefined)
+                            el.submitting_date = frappe.datetime.now_datetime();
+                        }
+                    )
                     if (frappe.user_roles.includes('0 CRM – Opportunity Option Cancellation')) {
                         frm.set_df_property(option_btn_name + '_cancel', 'hidden', 0);
                     }
