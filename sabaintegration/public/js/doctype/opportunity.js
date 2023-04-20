@@ -44,7 +44,7 @@ frappe.ui.form.on("Opportunity", {
         }
         // testing submit button
         frm.trigger("scheck_option_status")
-        frm.trigger("check_empty_option")
+        frm.trigger("check_empty_option") 
  
     // testing submit button end
     },
@@ -115,14 +115,25 @@ frappe.ui.form.on("Opportunity", {
     },
     refresh(frm) {
         // set_css(frm);
-        frm.add_custom_button(__('Update Option Items'),
-            function() {
-                frm.trigger("update_option_items")
-            });
-        frm.add_custom_button(__('Request For Quotation New Tab'),
-            function() {
-                frm.trigger("make_request_for_quotation_new_tab")
-            }, __('Create'));
+        var doc = frm.doc;
+        if(!frm.is_new() && doc.status!=="Lost") {
+            if(doc.items){
+                frm.add_custom_button(__('Update Option Items'),
+                    function() {
+                        frm.trigger("update_option_items")
+                    });
+                var rfq = document.querySelectorAll('[data-label="Request%20For%20Quotation"]');
+                rfq[0].style.display = "none";
+                frm.add_custom_button(__('Custom Request For Quotation'),
+                    function() {
+                        frm.trigger("make_custom_request_for_quotation")
+                    }, __('Create'));
+                frm.add_custom_button(__('Custom Request For Quotation New Tab'),
+                    function() {
+                            cur_frm.trigger("make_request_for_quotation_new_tab")                        
+                    }, __('Create'));
+            }
+        }
         // $("a[data-label='Request%20For%20Quotation']").addClass("hidden");
         if (!frm.doc.parent_items || frm.doc.parent_items.length < 1) frm.toggle_display('parent_items', false);
         
@@ -169,8 +180,8 @@ frappe.ui.form.on("Opportunity", {
     },
     check_selected_option_status: function(frm) { 
         // console.log("triggered");
-        var rfq = document.querySelectorAll('[data-label="Request%20For%20Quotation"]');
-        var rfq_new_tab = document.querySelectorAll('[data-label="Request%20For%20Quotation%20New%20Tab"]');
+        var rfq = document.querySelectorAll('[data-label="Custom%20Request%20For%20Quotation"]');
+        var rfq_new_tab = document.querySelectorAll('[data-label="Custom%20Request%20For%20Quotation%20New%20Tab"]');
         if (frm.doc['option'+frm.doc.selected_option+'status'] == "1" ){
             rfq[0].style.display = "block";
             rfq_new_tab[0].style.display = "block";
@@ -195,6 +206,12 @@ frappe.ui.form.on("Opportunity", {
             })
     },
 
+    make_custom_request_for_quotation: function(frm) { 
+		frappe.model.open_mapped_doc({
+			method: "sabaintegration.overrides.opportunity.make_request_for_quotation",
+			frm: frm           
+		})
+	},       
     make_request_for_quotation: function(frm) { 
 		frappe.model.open_mapped_doc({
 			method: "sabaintegration.overrides.opportunity.make_request_for_quotation",
