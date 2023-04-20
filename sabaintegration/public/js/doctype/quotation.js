@@ -21,6 +21,8 @@ frappe.ui.form.on('Quotation', {
 		if (frm.doc.option_number_from_opportunity > 0 ){
 			frm.toggle_display('option_number_from_opportunity', true)
 		}
+		if (frm.is_new()) frappe.model.set_value(frm.doc.doctype, frm.doc.name, "costs_template", "Projects Indirect Cost Analysis");
+
 		$("[data-fieldname= 'expected_profit_loss'] .control-label").css("font-weight", "bold")
 		$("[data-fieldname= 'expected_profit_loss_value'] .control-label").css("font-weight", "bold")
 
