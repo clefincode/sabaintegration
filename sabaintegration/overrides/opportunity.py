@@ -424,13 +424,19 @@ def replace_item(args, opp_doc):
     })
     opp.save()
     opp.reload()
+    if frappe.db.exists("Quotation Item", {
+        'item_code': args["item_code"], 
+        'opportunity': args["opportunity"],
+        'opportunity_option_number': args["option_number"],
+        'docstatus': 1}):
+        cancel_quotation(args)
     # Replaced Item in at least one Request
     if frappe.db.exists("Request for Quotation Item", {
         'item_code': args["item_code"], 
         'opportunity': args["opportunity"],
         'opportunity_option_number': args["option_number"],
         'docstatus': ('!=', 2)}):
-        update_SQs(args)
+        #update_SQs(args)
         doc = update_RFQs(args)
 
     frappe.db.commit()
@@ -466,6 +472,18 @@ def update_SQs(args):
 
         doc.cancel()
 
+def cancel_quotation(args):
+    item_code = args.get("item_code")
+    opportunity, option_number = args.get("opportunity"), args.get("option_number")
+    quote = frappe.db.get_value("Quotation Item", {
+        'item_code': item_code, 
+        'opportunity': opportunity,
+        'opportunity_option_number': option_number,
+        'docstatus': 1
+        }, 'parent')
+    doc = frappe.get_doc("Quotation", quote)
+    doc.cancel()
+
 def update_RFQs(args):
     from erpnext.stock.doctype.packed_item.packed_item import is_product_bundle
     item_code = args.get("item_code")
@@ -479,12 +497,21 @@ def update_RFQs(args):
     }, 'parent', distinct = 1)
     added_packed = []
     new_s_rfqs = []
+    cancelled_sqs = {}
     for rfq in RFQs:
         SQs = []
-        rfq_doc = frappe.get_doc('Request for Quotation', rfq.parent)
-        tosubmit = 1 if rfq_doc.docstatus == 1 else 0
+        docstatus = frappe.db.get_value('Request for Quotation', rfq.parent, 'docstatus')
+        tosubmit = 1 if docstatus == 1 else 0
         if tosubmit: 
             SQs = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': rfq.parent, "docstatus": 1}, 'parent', distinct = 1)
+            if SQs:
+                for sq in SQs:
+                    sqdoc = frappe.get_doc("Supplier Quotation", sq.parent)
+                    if not cancelled_sqs.get(rfq.parent):
+                        cancelled_sqs[rfq.parent] = [sqdoc.name]
+                    else: cancelled_sqs[rfq.parent].append(sqdoc.name)
+                    sqdoc.cancel()
+        rfq_doc = frappe.get_doc('Request for Quotation', rfq.parent)
         new_rfq = amend_rfq(rfq_doc)
         new_added_packed = replace_item_with_item(new_rfq, item_code, new_item_code, option_number, added_packed)
         if isinstance(new_added_packed, string_types):
@@ -496,13 +523,27 @@ def update_RFQs(args):
         len(new_rfq.items) > 1):
             new_rfq.insert(ignore_permissions = True)
             inserted = True
-        if tosubmit and SQs:
-            for sq in SQs:
-                sqdoc = frappe.get_doc("Supplier Quotation", sq.parent)
-                if sqdoc.docstatus == 1: sqdoc.cancel()
+        
         if tosubmit and inserted: 
             new_rfq.submit()
             new_s_rfqs.append(new_rfq)
-    create_sqs_if_necessary(new_s_rfqs)
+    create_sqs_if_necessary(new_s_rfqs, cancelled_sqs)
+    update_quotation(opportunity, option_number, new_s_rfqs)
     return create_rfq_if_necessary(new_item_code, item_code, added_packed, opportunity, option_number)
          
+def update_quotation(opportunity, option_number, excluded_rfqs):
+    excluded_rfqs = [i.name for i in excluded_rfqs]
+    rfqs = frappe.db.get_all("Request for Quotation Item", {
+        'parent': ('not in', excluded_rfqs),
+        'opportunity': opportunity,
+        'opportunity_option_number': option_number,
+        'docstatus': 1
+    }, 'parent', distinct = 1)
+    for rfq in rfqs:
+        sqs = frappe.db.get_all("Supplier Quotation Item", {
+            'request_for_quotation': rfq.parent,
+            'docstatus': 1
+        }, 'parent', distinct = 1)
+        for sq in sqs:
+            doc = frappe.get_doc("Supplier Quotation", sq.parent)
+            doc.create_quotation_automatically()

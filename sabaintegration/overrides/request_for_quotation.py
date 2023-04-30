@@ -189,31 +189,32 @@ class CustomRequestforQuotation(RequestforQuotation):
                     rfq_supplier.contact = contact
                 rfq_supplier.save()
     
-    # def update_sqs_rates(self, sqs):
-    #     from sabaintegration.overrides.supplier_quotation import set_rates
-    #     supplier_quotation = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': self.name, "docstatus": 0}, 'parent', distinct = 1)
-    #     if supplier_quotation:
-    #         supplier_quotation = supplier_quotation[0].parent
-    #         not_updated_items = updated_items = []
-    #         if not self.get("amended_from"): return
-    #         sqs = sqs.get(self.amended_from)
-    #         print(f"\033[93m {sqs}")
-    #         if not sqs: return
-    #         for sq in sqs:
-    #             items = set_rates(sq, supplier_quotation)
-    #             for i in items[0]['updated_items']:
-    #                 updated_items.append(i)
-    #             for i in items[1]['not_updated_items']:
-    #                 not_updated_items.append(i)
-    #         print(f"\033[94m {updated_items}")
-    #         print(f"\033[94m {not_updated_items}")
-    #         doc = frappe.get_doc("Supplier Quotation", supplier_quotation)
-    #         doc.items = []
-    #         doc.append("items", not_updated_items)
-    #         doc.append("items", updated_items)
-    #         doc.save(ignore_permissions = True)
-    #         if not not_updated_items:
-    #             doc.submit(ignore_permissions = True)
+    def update_sqs_rates(self, sqs):
+        from sabaintegration.overrides.supplier_quotation import set_rates
+        supplier_quotation = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': self.name, "docstatus": 0}, 'parent', distinct = 1)
+        if supplier_quotation:
+            supplier_quotation = supplier_quotation[0].parent
+            not_updated_items = []
+
+            if not self.get("amended_from"): return
+            sqs = sqs.get(self.amended_from)
+
+            if not sqs: return
+            doc = frappe.get_doc("Supplier Quotation", supplier_quotation)
+            itemslist = deepcopy(doc.items)
+            doc.items = []
+            for sq in sqs:
+                items = set_rates(sq, supplier_quotation, itemslist)
+                for i in items[0]['updated_items']:
+                    doc.append("items", i)
+                for i in items[1]['not_updated_items']:
+                    doc.append("items", i)
+                    not_updated_items.append(i)
+
+            doc.flags.ignore_permissions = True
+            doc.save(ignore_permissions = True)
+            if not not_updated_items:
+                doc.submit()
 
     def check_opportunity_option_number(self):
         opportunity_option_number = None

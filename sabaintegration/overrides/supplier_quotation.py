@@ -211,7 +211,6 @@ class CustomSupplierQuotation(SupplierQuotation):
         
         quote_doc.save(ignore_permissions = True)
 
-        frappe.db.commit()
         frappe.msgprint("Quotation <a href ='/app/quotation/{0}'><b>{0}</b></a> is updated".format(quotation))
 
     def create_quotation_automatically(self):
@@ -568,10 +567,11 @@ def add_supplier_quotation_row(supplier_quotation, opportunity, opportunity_opti
     doc.append("supplier_quotations", from_sq)
 
 @frappe.whitelist()
-def set_rates(source_name, target_name):
+def set_rates(source_name, target_name, itemslist = None):
     source_doc = frappe.get_doc("Supplier Quotation", source_name)
     target_doc = frappe.get_doc("Supplier Quotation", target_name)
-    itemslist = deepcopy(target_doc.items)
+    if not itemslist:
+        itemslist = deepcopy(target_doc.items)
     conversion_rate = get_exchange_rate(source_doc.currency, target_doc.currency)    
     items = []
     not_updated_items = [] 

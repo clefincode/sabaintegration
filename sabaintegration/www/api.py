@@ -516,11 +516,11 @@ def amend_rfq(doc):
 	if doc.docstatus == 0:
 		doc.delete(ignore_permissions = True)
 	else:
-		if frappe.db.exists('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}):
-			SQs = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}, 'parent', distinct = 1)
-			for sq in SQs:
-				sq_doc = frappe.get_doc('Supplier Quotation', sq.parent)
-				sq_doc.cancel()
+		# if frappe.db.exists('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}):
+		# 	SQs = frappe.db.get_all('Supplier Quotation Item', {'request_for_quotation': doc.name, 'docstatus': 1}, 'parent', distinct = 1)
+		# 	for sq in SQs:
+		# 		sq_doc = frappe.get_doc('Supplier Quotation', sq.parent)
+		# 		sq_doc.cancel()
 		newdoc.amended_from = doc.name
 		doc.cancel()
 	return newdoc
@@ -641,8 +641,8 @@ def create_rfq_if_necessary(new_item_code, item_code, added_packed, opportunity,
 			return make_request_for_quotation(opportunity)
 	return None
 
-def create_sqs_if_necessary(new_s_rfqs):
+def create_sqs_if_necessary(new_s_rfqs, cancelled_sqs):
 	for rfq in new_s_rfqs:
-		if frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": rfq.name}):
-			continue
-		rfq.create_sq_automatically()
+		if not frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": rfq.name}):
+			rfq.create_sq_automatically()
+		rfq.update_sqs_rates(cancelled_sqs)
