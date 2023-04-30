@@ -42,6 +42,7 @@ class CustomQuotation(Quotation):
 		if self.items:
 			self.with_items = 1
 
+		if self.get("_action") and self._action != 'submit': self.validate_removed_items()
 		self.add_item_name_in_packed()
 		make_packing_list(self) 
 
@@ -57,8 +58,6 @@ class CustomQuotation(Quotation):
 			self.set_title()	
 		if self.get("_action") and self._action == 'submit':
 			self.submitting_date = now()
-
-	
 
 	# def after_insert(self):
 	# 	self.assign_quote()
@@ -142,6 +141,28 @@ class CustomQuotation(Quotation):
 		if self.supplier_quotations:
 			self.title = frappe.db.get_value("Supplier Quotation", self.supplier_quotations[0].supplier_quotation, "title")
 
+	def validate_removed_items(self):
+		if not self.get("supplier_quotations"): return
+		doc_before_save = self.get_doc_before_save()
+
+		if not doc_before_save: return
+		items_before_save = [[item.item_code, item.section_title, item.opportunity] for item in doc_before_save.get("items")]
+		items_after_save = [[item.item_code, item.section_title, item.opportunity] for item in self.get("items")]
+		reset_table = items_before_save != items_after_save
+		if not reset_table: return
+		for item in items_before_save:
+			found = False
+			for curr_item in items_after_save:
+				if curr_item[0] == item[0] and\
+				curr_item[1] == item[1]:
+					found = True
+					break
+			if not found:
+				if item[2]:
+					if not check_permission_remove_item(frappe.session.user):
+						frappe.throw("You don't have enough permission to remove an item of the opportuity")
+					else: frappe.msgprint("Be careful. You have removed item <b>{0}</b> which is from opportuity <b>{1}</b>".format(item[0], item[2]))
+
 	def before_submit(self):
 		if self.supplier_quotations: self.check_opportunity()
 
@@ -194,10 +215,11 @@ class CustomQuotation(Quotation):
 						# 	break
 						i += 1
 				if not found:
-					frappe.throw("""You can't submit this document now until you add
-					all items of <b>{0}</b> from the opportunity <a href='/app/opportunity/{1}'><b>{1}</b></a>.<br>
-					Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
-					opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
+					if not check_permission_remove_item(frappe.session.user):
+						frappe.throw("""You can't submit this document now until you add
+						all items of <b>{0}</b> from the opportunity <a href='/app/opportunity/{1}'><b>{1}</b></a>.<br>
+						Item <b>{2} {3}</b> is not fully added to the quotation""".format("option" + str(opportunity_option) if opportunity_option else "items table", 
+						opportunity_name, notfounditem, "with section "+ str(option_item.section_title) if option_item.get("section_title") else ""))
 	
 	def sort_items(self , opportunity_option_number):
 		doc_before_save = self.get_doc_before_save()
@@ -398,6 +420,12 @@ def remove_quote_from_copied_option(quote):
 @frappe.whitelist()
 def check_permission_qty(user):
 	if "0 Selling - Quotation edit qty" in frappe.get_roles():
+		return True
+	return False
+
+@frappe.whitelist()
+def check_permission_remove_item(user):
+	if "0 Selling - Quotation Remove Item" in frappe.get_roles():
 		return True
 	return False
 
