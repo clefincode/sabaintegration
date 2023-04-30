@@ -42,7 +42,11 @@ class CustomQuotation(Quotation):
 		if self.items:
 			self.with_items = 1
 
-		if self.get("_action") and self._action != 'submit': self.validate_removed_items()
+		if self.get("_action") and self._action != 'submit': 
+			if self.get("is_saved_from_ui"):
+				self.validate_removed_items()
+				self.is_saved_from_ui = 0
+
 		self.add_item_name_in_packed()
 		make_packing_list(self) 
 

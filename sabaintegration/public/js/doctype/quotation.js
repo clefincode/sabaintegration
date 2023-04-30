@@ -29,6 +29,20 @@ frappe.ui.form.on('Quotation', {
 		$("[data-fieldname= 'expected_profit_loss'] .control-value").css("font-weight", "bold")
 		$("[data-fieldname= 'expected_profit_loss_value'] .control-value").css("font-weight", "bold")
 	},
+	onload: function(frm) {
+        const originalSave = frappe.ui.form.save;
+        frappe.ui.form.save = function() {
+            if (cur_frm && cur_frm.doc.doctype === 'Quotation') {
+                cur_frm.set_value('is_saved_from_ui', 1);
+            }
+            originalSave.apply(this, arguments);
+        };
+    },
+    before_save: function(frm) {
+        if (!frm.doc.__islocal) {
+            setTimeout(() => frm.set_value('is_saved_from_ui', 0), 100);
+        }
+    },
 	after_save: function(frm){
 		if (frm.doc.option_number_from_opportunity > 0 ){
 			frm.toggle_display('option_number_from_opportunity', true)
