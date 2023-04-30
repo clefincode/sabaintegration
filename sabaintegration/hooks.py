@@ -32,7 +32,7 @@ app_license = "MIT"
 
 # include js in doctype views
 doctype_js = {
-	"Sales Order" : "public/js/doctype/sales_order_updates.js",
+	"Sales Order" : "public/js/doctype/sales_order_old_updates.js",
 	"Delivery Note" : "public/js/doctype/delivery_note_updates.js",
 	"Product Bundle" : "public/js/doctype/product_bundle_item_prevents.js",
 	"Opportunity" : "public/js/doctype/opportunity.js",
@@ -42,7 +42,7 @@ doctype_js = {
 	"Item": "public/js/doctype/item.js",
 	"Product Bundle": "public/js/doctype/product_bundle.js",
 	"Lead": "public/js/doctype/lead.js",
-	#"Attendance": "public/js/doctype/attendance.js"
+	"Attendance": "public/js/doctype/attendance.js"
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
@@ -111,9 +111,9 @@ override_doctype_class = {
 	'Quotation': 'sabaintegration.overrides.quotation.CustomQuotation',
 	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
 	'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
-	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry'
-    # 'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
-    # 'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder'
+	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry',
+    'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
+    'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder'
 }
 
 # Document Events
