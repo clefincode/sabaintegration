@@ -21,7 +21,7 @@ frappe.ui.form.on('Attendance', {
 		var minutes = end.diff(start, 'minutes');
 		var hours = Math.trunc(minutes/60);
 		var m1 = minutes%60;		
-		frm.set_value('total_working_hours', hours + m1/60 )
+		frm.set_value('total_working_hours_between_start_and_finish', hours + m1/60 )
 	},
 	start_on: function(frm) {
 		var start = moment(frm.doc.start_on, "HH:mm");
@@ -29,16 +29,15 @@ frappe.ui.form.on('Attendance', {
 		var minutes = end.diff(start, 'minutes');
 		var hours = Math.trunc(minutes/60);
 		var m1 = minutes%60;		
-		frm.set_value('total_working_hours', hours + m1/60 )
+		frm.set_value('total_working_hours_between_start_and_finish', hours + m1/60 )
 		
 	},
-	total_working_hours: function(frm) {	
-		console.log(frm.doc.total_working_hours - frm.doc.not_available_for)	
-		frm.set_value('actual_working_hours', frm.doc.total_working_hours - frm.doc.not_available_for )	
+	total_working_hours_between_start_and_finish: function(frm) {	
+		frm.set_value('actual_hours', frm.doc.total_working_hours_between_start_and_finish - frm.doc.not_available_for )	
 		
 	},
 	not_available_for: function(frm) {		
-		frm.set_value('actual_working_hours', frm.doc.total_working_hours - frm.doc.not_available_for )	
+		frm.set_value('actual_hours', frm.doc.total_working_hours_between_start_and_finish - frm.doc.not_available_for )	
 	
 	},	
 
@@ -129,30 +128,29 @@ frappe.ui.form.on('Attendance', {
 	},
 
 	actual_working_hours: function(frm) {
-		// Actual working hours will be the subtraction of the [not_available_for - total_working_hours] fields
-		// if (frm.doc.status=='Absent'){
-		// 	frm.set_value("day_appraisal_total", 0)
-		// 	frm.set_value("work_status_points", 0)
-		// 	frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
-		// }else if(frm.doc.status=='On Leave'){
-		// 	frm.set_value("day_appraisal_total", 0)
-		// 	frm.set_value("work_status_points", 0)
-		// 	frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
-		// }else if(frm.doc.status=='Present' && (frm.doc.location=='Stand By' || frm.doc.location=='Vacation')){
-		// 	frm.set_value("work_status_points", 0)
-		// 	frm.set_value("day_appraisal_total", 0)
-		// 	frm.set_value("day_total_points", frm.doc.day_appraisal_total+frm.doc.work_status_points)
-		// }else if(frm.doc.location=='Stand By' || frm.doc.location=='Vacation'){
-		// 	frm.set_value("work_status_points", 0)
-		// 	frm.set_value("day_appraisal_total", 0)
-		// 	frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
-		// }else if(frm.doc.status=='Present'){
-		// 	frm.set_value("day_appraisal_total", get_working_hours(frm.doc.actual_working_hours)+get_productivity(frm.doc.productivty)+get_team(frm.doc.team_and_customer_relation)+get_extra(frm.doc.extra_bonus)+frm.doc.saba_special_bonus)
-		// 	frm.set_value("day_total_points", frm.doc.day_appraisal_total+frm.doc.work_status_points)
-		// }else{
-		// 	frm.set_value("day_appraisal_total", get_working_hours(frm.doc.actual_working_hours)+get_productivity(frm.doc.productivty)+get_team(frm.doc.team_and_customer_relation)+get_extra(frm.doc.extra_bonus)+frm.doc.saba_special_bonus)
-		// 	frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)		
-		// }
+		if (frm.doc.status=='Absent'){
+			frm.set_value("day_appraisal_total", 0)
+			frm.set_value("work_status_points", 0)
+			frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
+		}else if(frm.doc.status=='On Leave'){
+			frm.set_value("day_appraisal_total", 0)
+			frm.set_value("work_status_points", 0)
+			frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
+		}else if(frm.doc.status=='Present' && (frm.doc.location=='Stand By' || frm.doc.location=='Vacation')){
+			frm.set_value("work_status_points", 0)
+			frm.set_value("day_appraisal_total", 0)
+			frm.set_value("day_total_points", frm.doc.day_appraisal_total+frm.doc.work_status_points)
+		}else if(frm.doc.location=='Stand By' || frm.doc.location=='Vacation'){
+			frm.set_value("work_status_points", 0)
+			frm.set_value("day_appraisal_total", 0)
+			frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)
+		}else if(frm.doc.status=='Present'){
+			frm.set_value("day_appraisal_total", get_working_hours(frm.doc.actual_working_hours)+get_productivity(frm.doc.productivty)+get_team(frm.doc.team_and_customer_relation)+get_extra(frm.doc.extra_bonus)+frm.doc.saba_special_bonus)
+			frm.set_value("day_total_points", frm.doc.day_appraisal_total+frm.doc.work_status_points)
+		}else{
+			frm.set_value("day_appraisal_total", get_working_hours(frm.doc.actual_working_hours)+get_productivity(frm.doc.productivty)+get_team(frm.doc.team_and_customer_relation)+get_extra(frm.doc.extra_bonus)+frm.doc.saba_special_bonus)
+			frm.set_value("day_total_points", get_vacation_worked(frm.doc.working_in_a_vacation_)+frm.doc.day_appraisal_total+frm.doc.work_status_points)		
+		}
 
 	},
 
