@@ -277,7 +277,7 @@ frappe.ui.form.on('Quotation Item', {
 		frm.refresh_field("items");
 	},
 	qty: function(frm, cdt, cdn){
-		if (frm.doc.supplier_quotations){
+		if (frm.doc.supplier_quotations.length != 0){
 			var d = locals[cdt][cdn];
 			check_change_qty(frm, d)
 		}
