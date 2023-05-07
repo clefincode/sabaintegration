@@ -50,7 +50,7 @@ class CustomEmployee(Employee):
 
 		if toadd:
 			from sabaintegration.overrides.todo import get_leaders
-			from frappe.share import add
+			from frappe.share import add_docshare
 
 			leaders = get_leaders(self.todo_maintainer_)
 			if leaders : leaders.add(self.todo_maintainer_)
@@ -64,7 +64,7 @@ class CustomEmployee(Employee):
 			for todo in todos:
 				for leader in leaders:
 					if not frappe.db.exists("ToDo", {"share_doctype": "ToDo", "share_name": todo.name, "user": leader}):
-						add("ToDo", todo.name, leader ,flags = {"ignore_share_permission": 1})
+						add_docshare("ToDo", todo.name, leader , flags={"ignore_share_permission": True})
 		
 
 def get_employees(manager_id, employees_list = None):

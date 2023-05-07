@@ -14,9 +14,9 @@ class CustomToDo(ToDo):
     def share_with_leaders(self):
         employees = get_leaders(self.owner)
         if employees:
-            from frappe.share import add
+            from frappe.share import add_docshare
             for employee in employees:
-                add("ToDo", self.name, employee ,flags = {"ignore_share_permission": 1})
+                add_docshare("ToDo", self.name, employee , flags={"ignore_share_permission": True})
 
 def get_leaders(user, employees = None):
     if not employees:
