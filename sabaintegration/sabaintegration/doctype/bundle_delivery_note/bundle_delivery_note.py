@@ -39,14 +39,14 @@ class BundleDeliveryNote(Document):
 		state = self.create_delivery_note()
 		self.setting_packed_items_values(state)
 		self.check_bundles()
-		frappe.db.commit()
+		#frappe.db.commit()
 	
 	def before_cancel(self):
 		self.remove_packed_items()
 		remove_bdn(self.name, self.delivery_note)
 		delete_dn(self.name, self.delivery_note)
 		self.delivery_note = ''
-		frappe.db.commit()
+		#frappe.db.commit()
 
 	def validate_parent(self):
 		notfound = ""
@@ -176,7 +176,7 @@ class BundleDeliveryNote(Document):
 
 				frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', dn_name)
 				frappe.msgprint("Delivery Note is {0}".format('<a href="/app/delivery-note/'+ self.delivery_note + '" class="strong">'+ self.delivery_note + '</a>'))
-				frappe.db.commit()
+				#frappe.db.commit()
 				return state
 
 		delivery_note = make_delivery_note(self.sales_order)
@@ -197,7 +197,7 @@ class BundleDeliveryNote(Document):
 				})
 			frappe.db.set_value("Delivery Note Item", packed_item.parent_detail_docname, "from_bundle_delivery_note", 1)
 			
-		frappe.db.commit()
+		#frappe.db.commit()
 		frappe.msgprint("Delivery Note {0} has been created succesfully".format('<a href="/app/delivery-note/'+ delivery_note.name + '" class="strong">'+ delivery_note.name + '</a>'))
 		return state			
 	

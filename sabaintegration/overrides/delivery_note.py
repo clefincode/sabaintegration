@@ -162,6 +162,6 @@ def update_packed_item_basic_data(main_item_row, pi_row, packing_item, item_data
     from erpnext.stock.doctype.packed_item.packed_item import update_packed_item_basic_data
 
     update_packed_item_basic_data(main_item_row, pi_row, packing_item, item_data)
-
+    pi_row.description = frappe.db.get_value("Item", pi_row.item_code, "description")
     pi_row.excluded_item = packing_item.get("excluded_item") if  packing_item.get("excluded_item") else ""
     pi_row.is_alternative = 1 if packing_item.get("is_alternative") else 0
