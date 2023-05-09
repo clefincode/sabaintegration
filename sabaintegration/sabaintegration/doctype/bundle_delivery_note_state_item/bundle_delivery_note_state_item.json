@@ -1,0 +1,84 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2023-03-22 14:27:01.192222",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "parent_item",
+  "item_code",
+  "qty",
+  "warehouse",
+  "serial_no",
+  "is_excluded",
+  "original_item",
+  "is_removed"
+ ],
+ "fields": [
+  {
+   "fieldname": "parent_item",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Parent Item",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "reqd": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "label": "Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "serial_no",
+   "fieldtype": "Small Text",
+   "label": "Serial No"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_excluded",
+   "fieldtype": "Check",
+   "label": "Is Excluded"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_removed",
+   "fieldtype": "Check",
+   "label": "Is removed"
+  },
+  {
+   "fieldname": "original_item",
+   "fieldtype": "Link",
+   "label": "Original Item",
+   "options": "Item"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2023-03-27 21:43:59.251851",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Bundle Delivery Note State Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

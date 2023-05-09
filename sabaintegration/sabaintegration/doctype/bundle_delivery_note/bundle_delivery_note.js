@@ -4,8 +4,18 @@
 frappe.provide("erpnext");
 frappe.provide("erpnext.utils");
 
+frappe.provide("sabaintegration.utils");
+{% include 'sabaintegration/public/js/utils/utils.js' %}
+
 frappe.ui.form.on('Bundle Delivery Note', {
+	setup: function(frm){
+		frm.set_df_property('excluded_items', 'cannot_add_rows', true);
+		frm.set_df_property('excluded_items', 'cannot_delete_rows', true);
+	},
 	onload: function(frm){
+		if(frm.is_new()){
+			frm.set_df_property('excluded_items', 'hidden', 1)
+		}
 		frm.set_query("item_parent", function(doc){
 			return {
 				filters:{
@@ -21,78 +31,79 @@ frappe.ui.form.on('Bundle Delivery Note', {
 				}
 			}
 		})
+		frm.set_query("item_code", "parents_items", function(doc, cdt, cdn) {
+			return {
+				filters:{
+					"is_stock_item": 0,
+					"is_sales_item": 1
+				}
+			}
+		});
 		frm.set_query("item_code", "stock_entries", function(doc, cdt, cdn) {
 			return {
 				query:"sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_bundle_items",
-				filters: {'parent': doc.item_parent}
-			}
-		}); 
-		frm.set_query("batch_no", "stock_entries", function(doc, cdt, cdn) {
-			var item = locals[cdt][cdn];
-			return {
 				filters: {
-					'item': item.item_code
+					"parent":frm.doc.item_parent
 				}
-			};
-		}); 
+			}
+		}); 	
 		
 	},
 	refresh: function(frm) {
+		if(frm.is_new()){
+			frm.set_df_property('excluded_items', 'hidden', 1)
+		}else{
+			frm.set_df_property('excluded_items', 'hidden', 0)
+		}
 		erpnext.hide_company();
 		if (frm.doc.docstatus == 0){
 			frm.add_custom_button(__('Get Items'), function () {
 				frm.trigger("get_items");
 			});
+			if(!frm.is_new()){
+				frm.add_custom_button(__('Exclude Items'), function () {
+					frm.trigger("exclude_items")
+				});
+			}
 		}
 	},
-	item_parent: function(frm){
+	validate: function(frm){
+		if (frm.doc.multiple_items == 1){
+			frm.doc.item_parent = ""
+		}
+		else{
+			frm.doc.parents_items = []
+		}
+	},
+	default_warehouse(frm){
+        $.each(frm.doc.stock_entries || [], function(i, d) {
+			d.warehouse = frm.doc.default_warehouse;
+		});
+		frm.refresh_field("stock_entries");
+	},
+	get_items: function(frm){
+		let items = []
+		if (frm.doc.multiple_items == 0) items.push(frm.doc.item_parent);
+		else {
+			for (let item of frm.doc.parents_items){
+				items.push(item.item_code);
+			}
+		}
 		let itemsPromise = new Promise(function(resolve){
-			frm.events.set_items(frm, null,  resolve)
+			frm.events.set_items(frm, items, resolve)
 		})
 		itemsPromise.then(value =>{
 			frm.refresh_field("stock_entries");
 		})
-	},
-	
-	get_items: function(frm){
-		var dialog = new frappe.ui.Dialog({
-			title: __("Get Items"),
-			fields: [
-			{
-				label: 'Item Code',
-				fieldname: 'item_code',
-				fieldtype: 'Link',
-				options: 'Item',
-				"get_query": function () {
-					return {
-						query:"sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_bundle_items",
-						filters: {'parent': frm.doc.item_parent}
-					}
-				}
-			},
-			]
-		});
-		dialog.set_primary_action(__("Submit"), function() {
-			var data = dialog.get_values();
-			let itemsPromise = new Promise(function(resolve){
-				frm.events.set_items(frm, data.item_code, resolve)
-			})
-			itemsPromise.then(value =>{
-				frm.refresh_field("stock_entries");
-				dialog.hide();
-			})
-						
-		})
-		dialog.show();
+
 	},
 
-	set_items: function(frm, item_code = null, resolve) {
+	set_items: function(frm, items , resolve) {
 		frappe.call({
 			method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_items",
 			args: {
 				sales_order: frm.doc.sales_order,
-				item_parent : frm.doc.item_parent, 
-				item_code: item_code
+				parents : items, 
 			},
 			callback: function(r){
 				if (r.exc || !r.message || !r.message.length) {
@@ -116,6 +127,132 @@ frappe.ui.form.on('Bundle Delivery Note', {
 				
 			}
 		})
+	},
+
+	exclude_items: function(frm) {
+		frm.events.setup_excluded_items(frm, async (frm, data, items) => {
+			frappe.call({
+				method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.update_items",
+				args: {
+					stock_entries: frm.doc.stock_entries,
+					excluded_items: items,
+					sales_order: frm.doc.sales_order,	
+					price_list: frm.doc.price_list,
+					company: frm.doc.company
+				},
+				freeze: true,
+				callback: function(r) {
+					if(r.message) {
+						if (r.message.stock_entries)
+						{
+							frm.clear_table("stock_entries");
+							frm.refresh_field("stock_entries");
+							r.message.stock_entries.forEach((row) => {
+								let item = frm.add_child("stock_entries");
+								//$.extend(item, row);
+								item.item_code = row.item_code;
+								item.item_name = row.item_name;								
+								item.qty = row.qty;
+								item.warehouse = row.warehouse || '';
+								item.uom = row.uom;
+								item.rate = row.rate;
+								item.currency = row.currency;
+								
+							});
+							frm.refresh_field("stock_entries");
+
+							// update Excluded Items
+							items.forEach((row) => {
+								let item = frm.add_child("excluded_items");
+								item.parent_item = row.parent_item;
+								item.item_code = row.item_code;
+								item.alt_item = row.alt_item;
+								item.warehouse = row.warehouse;
+								frm.events.get_qty(frm, item)
+								if (item.alt_item) frm.events.get_alt_details(frm, item)
+								
+							});
+							frm.refresh_field("excluded_items");
+						}
+						frm.dirty();
+					}
+				}
+			});
+		})
+	},
+
+	setup_excluded_items: function(frm , callback) {
+		let me = this;		
+		const field = [
+			{	
+				"fieldtype": "Table",
+				"label": __("Excluded Items"),
+				"fieldname": "items",
+				"fields": [
+					{
+						fieldname: "parent_item",
+						options: "Item",
+						label: __("Parent Item"),
+						fieldtype: "Link",
+						in_list_view: 1,
+						reqd: 1,
+						get_query: () => {
+							return {
+								query:"sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_parents_items",
+								filters: {
+									"parent": frm.doc.name,
+									"item_parent":frm.doc.item_parent
+								}
+							}
+							
+						}
+					},
+					{
+						fieldname: "item_code",
+						options: "Item",
+						label: __("Item Code"),
+						fieldtype: "Link",
+						in_list_view: 1,
+						reqd: 1,
+						get_query: (data) => {							
+							return {
+								query:"sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_packed_items",
+								filters: {
+									"parent": frm.doc.name,
+									"parent_item": data.parent_item
+								}
+							}							
+						}
+					},
+					{
+						fieldname: "alt_item",
+						options: "Item",
+						label: __("Alternative Item"),
+						fieldtype: "Link",
+						in_list_view: 1,
+						get_query: () => {
+							return {
+								filters: {
+									"is_stock_item": 1 
+								}
+							};							
+						}
+					},
+					{
+						fieldname: "warehouse",
+						options: "Warehouse",
+						label: __("Warehouse"),
+						fieldtype: "Link",
+						in_list_view: 1,
+					}
+				],
+			}
+		];
+		let dialog = frappe.prompt(field, data => {
+			let items = data.items || [];			
+			callback(frm, data, items);
+		})
+		
 	},
 
 	set_rate_and_qty: function(frm, cdt, cdn) {
@@ -168,8 +305,49 @@ frappe.ui.form.on('Bundle Delivery Note', {
 		})
 	},
 	stock_entries_on_form_rendered: function() {
-		erpnext.setup_serial_or_batch_no();
+		sabaintegration.utils.bdn.setup_serial_or_batch_no();
 	},
+	get_qty: function(frm, d) {
+		frappe.call({
+			method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_item_qty",
+			args: {
+				sales_order: frm.doc.sales_order,
+				parent_item: d.parent_item, 
+				item_code: d.item_code
+			},
+			callback: async function(r){
+				if (r.message) {
+					d.qty = r.message;
+					frm.refresh_field("excluded_items");
+				}
+			}
+		})	
+	},
+	get_alt_details: function(frm, d){
+		let has_warehouse = true;
+		if (!d.warehouse) has_warehouse = false;
+		frappe.call({
+			method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_alt_details",
+			args: {
+				item_code: d.alt_item,
+				sales_order: frm.doc.sales_order,
+				price_list: frm.doc.price_list, 
+				company: frm.doc.company,
+				has_warehouse: has_warehouse
+			},
+			callback: function(r){
+				if (r.message){
+					d.rate = r.message.rate;
+					d.uom = r.message.uom
+					d.currency = r.message.currency;
+					d.item_name = r.message.item_name;
+					if (!has_warehouse) d.warehouse = r.message.warehouse;
+					frm.refresh_field("excluded_items");
+				}
+			}
+		})
+		frm.refresh_field("excluded_items");
+	}
 });
 
 frappe.ui.form.on('Bundle Delivery Note Item', {

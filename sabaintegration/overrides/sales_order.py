@@ -13,41 +13,41 @@ from erpnext.selling.doctype.sales_order.sales_order import SalesOrder, make_pro
 class CustomSalesOrder(SalesOrder):
     def validate(self):
         super(CustomSalesOrder, self).validate()
-        # self.update_total_margin()
-        # self.update_costs()
-        # if self.get("_action") and self._action == 'submit':
-        #     self.submitting_date = now()
+        self.update_total_margin()
+        self.update_costs()
+        if self.get("_action") and self._action == 'submit':
+            self.submitting_date = now()
         if self.get("_action") and self._action != 'update_after_submit':
             if not self.tc_name:
                 frappe.throw("Terms is a mandatory field")
 
-    # def update_total_margin(self):
-    #     self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
-    #     for item in self.items:
-    #         self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
-    #         self.total += flt(item.amount, item.precision("amount"))
-    #     self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
-    #     self.base_total = self.total * self.conversion_rate
+    def update_total_margin(self):
+        self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
+        for item in self.items:
+            self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
+            self.total += flt(item.amount, item.precision("amount"))
+        self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
+        self.base_total = self.total * self.conversion_rate
 
-    #     self.total_items_markup_value = (self.total - self.total_rate_without_margin)
-    #     self.base_total_items_markup_value = self.total_items_markup_value * self.conversion_rate
-    #     self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
+        self.total_items_markup_value = (self.total - self.total_rate_without_margin)
+        self.base_total_items_markup_value = self.total_items_markup_value * self.conversion_rate
+        self.total_margin = self.total_items_markup_value / self.total_rate_without_margin * 100 if self.total_rate_without_margin else 0 
 
-    # def update_costs(self):
-    #     total_costs = 0.00
-    #     if self.get("costs"): 
-    #         for row in self.costs:
-    #             row.cost_value = self.net_total * row.cost_percentage / 100
-    #             total_costs += row.cost_value
-    #     self.total_costs = total_costs
-    #     self.base_total_costs = self.total_costs * self.conversion_rate
+    def update_costs(self):
+        total_costs = 0.00
+        if self.get("costs"): 
+            for row in self.costs:
+                row.cost_value = self.net_total * row.cost_percentage / 100
+                total_costs += row.cost_value
+        self.total_costs = total_costs
+        self.base_total_costs = self.total_costs * self.conversion_rate
         
-    #     self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
-    #     self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
+        self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
+        self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
 
-    #     self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs 
-    #     self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
-    #     self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
+        self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs 
+        self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
+        self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
 
     # def on_submit(self):
     #     super(CustomSalesOrder, self).on_submit()

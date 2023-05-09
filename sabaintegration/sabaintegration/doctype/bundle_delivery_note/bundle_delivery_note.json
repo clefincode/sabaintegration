@@ -9,12 +9,20 @@
  "field_order": [
   "item_parent",
   "sales_order",
+  "multiple_items",
   "column_break_3",
   "price_list",
   "company",
   "project",
   "section_break_5",
+  "parents_section",
+  "parents_items",
+  "section_break_dbuge",
+  "default_warehouse",
   "stock_entries",
+  "excluded_packed_items_section",
+  "excluded_items",
+  "section_break_7xecd",
   "delivery_note",
   "amended_from"
  ],
@@ -28,16 +36,11 @@
    "reqd": 1
   },
   {
-   "fieldname": "stock_entries",
-   "fieldtype": "Table",
-   "label": "items",
-   "options": "Bundle Delivery Note Item"
-  },
-  {
    "fieldname": "delivery_note",
    "fieldtype": "Link",
    "label": "Delivery Note",
-   "options": "Delivery Note"
+   "options": "Delivery Note",
+   "read_only": 1
   },
   {
    "fieldname": "amended_from",
@@ -49,11 +52,12 @@
    "read_only": 1
   },
   {
+   "depends_on": "eval: doc.multiple_items == 0",
    "fieldname": "item_parent",
    "fieldtype": "Link",
    "label": "Item Parent",
-   "options": "Item",
-   "reqd": 1
+   "mandatory_depends_on": "eval: doc.multiple_items == 0",
+   "options": "Item"
   },
   {
    "fieldname": "column_break_3",
@@ -81,15 +85,70 @@
    "fieldtype": "Link",
    "label": "Company",
    "options": "Company"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "parents_section",
+   "fieldtype": "Section Break",
+   "label": "Items"
+  },
+  {
+   "depends_on": "eval: doc.multiple_items == 1",
+   "fieldname": "parents_items",
+   "fieldtype": "Table",
+   "label": "Parents Items",
+   "mandatory_depends_on": "eval: doc.multiple_items == 1",
+   "options": "Bundle Delivery Note Parent Item"
+  },
+  {
+   "fieldname": "section_break_dbuge",
+   "fieldtype": "Section Break",
+   "label": "Packed Items"
+  },
+  {
+   "default": "0",
+   "fieldname": "multiple_items",
+   "fieldtype": "Check",
+   "label": "Multiple Items "
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "excluded_packed_items_section",
+   "fieldtype": "Section Break",
+   "label": "Excluded Packed Items"
+  },
+  {
+   "fieldname": "excluded_items",
+   "fieldtype": "Table",
+   "label": "Excluded Items",
+   "options": "Bundle Delivery Note Excluded Item",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_7xecd",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "stock_entries",
+   "fieldtype": "Table",
+   "label": "items",
+   "options": "Bundle Delivery Note Item"
+  },
+  {
+   "fieldname": "default_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Warehouse",
+   "options": "Warehouse"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2022-10-19 12:08:16.346789",
+ "modified": "2023-04-06 10:26:03.545297",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Bundle Delivery Note",
+ "naming_rule": "Expression (old style)",
  "owner": "Administrator",
  "permissions": [
   {
@@ -106,5 +165,6 @@
   }
  ],
  "sort_field": "modified",
- "sort_order": "DESC"
+ "sort_order": "DESC",
+ "states": []
 }

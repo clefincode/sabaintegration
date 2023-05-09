@@ -1,22 +1,34 @@
 # Copyright (c) 2022, Ahmad and contributors
 # For license information, please see license.txt
+import json
+from six import string_types
+from copy import deepcopy
 
 import frappe
 from frappe import _, msgprint
 from frappe.model.document import Document
 from frappe.utils import (getdate , nowtime, cint, cstr, flt)
-from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note
+
 from erpnext.stock.stock_ledger import NegativeStockError, get_previous_sle
+from erpnext.stock.doctype.packed_item.packed_item import get_product_bundle_items
+
+from sabaintegration.overrides.sales_order import make_delivery_note
+from sabaintegration.stock.get_item_details import get_item_warehouse
 
 class BundleDeliveryNote(Document):
 
-	def before_save(self):
-		for item in self.stock_entries:
-			self.check_bundle_items_qtys(item)
+	def __init__(self, *args, **kwargs):
+		super(BundleDeliveryNote, self).__init__(*args, **kwargs)
+		self.items = []
+		if self.get("item_parent"):
+			self.items = [self.get("item_parent")]
+		elif self.get("parents_items"):
+			self.items = [item.item_code for item in self.parents_items]
 	
 	def validate(self):
 		self.validate_parent()
 		self.validate_data()
+		self.validate_excluded_items()			
 
 	def before_submit(self):
 		if not self.stock_entries:
@@ -24,55 +36,43 @@ class BundleDeliveryNote(Document):
 		self.create_stock_entry()
 
 	def on_submit(self):
-		self.create_delivery_note()
-		self.setting_packed_items_values()
+		state = self.create_delivery_note()
+		self.setting_packed_items_values(state)
 		self.check_bundles()
+		frappe.db.commit()
 	
 	def before_cancel(self):
 		self.remove_packed_items()
+		remove_bdn(self.name, self.delivery_note)
 		delete_dn(self.name, self.delivery_note)
 		self.delivery_note = ''
-
-	def check_bundle_items_qtys(self, item):
-		bundle_child_qty = frappe.db.get_value('Packed Item', {'parent': self.sales_order, 'item_code': item.item_code, 'parent_item': self.item_parent}, 'qty')
-		BDNs = frappe.db.get_all('Bundle Delivery Note', {'name': ('!=', self.name),'sales_order': self.sales_order, 'item_parent': self.item_parent ,'docstatus': ('!=', 2)}, 'name')
-		total_qty =item.qty
-		for BDN in BDNs:
-			qty = frappe.db.get_value('Bundle Delivery Note Item', {'parent': BDN.name, 'item_code': item.item_code}, 'qty')
-			if qty:
-				total_qty += qty
-		if bundle_child_qty < total_qty:
-			frappe.throw("The quantity of item <b>{0}</b> is more than the required quantity. Required quantity is <b>{1}</b>. You Provided <b>{2}</b>".format(item.item_code, bundle_child_qty, total_qty))
-
+		frappe.db.commit()
 
 	def validate_parent(self):
-		if not frappe.db.exists("Sales Order Item", {'parent' :self.sales_order, 'item_code': self.item_parent}):
-			frappe.throw("Item <b>{0}</b> is not found in the sales order".format(self.item_parent))
+		notfound = ""
+		if self.get("item_parent"):
+			if not frappe.db.exists("Sales Order Item", {'parent' :self.sales_order, 'item_code': self.item_parent}):
+				notfound = self.item_parent
+	
+		elif self.get("parents_items"):
+			for item in self.parents_items:
+				if not frappe.db.exists("Sales Order Item", {'parent' :self.sales_order, 'item_code': item.item_code}):
+					notfound = item.item_code
+
+		if notfound:
+			frappe.throw("Item <b>{0}</b> is not found in the sales order".format(notfound))
 
 	def validate_data(self):
 		def _get_msg(row_num, msg):
 			return _("Row # {0}:").format(row_num + 1) + " " + msg
 
 		self.validation_messages = []
-		items = []
-		for row_num, row in enumerate(self.stock_entries):
-			# find duplicates
-			key = [row.item_code]
 
-			if key in items:
-				self.validation_messages.append(_get_msg(row_num, _("Duplicate entry")))
-			else:
-				items.append(key)
-			product_bundle = frappe.db.get_value("Product Bundle", {"new_item_code": self.item_parent}, "name")
-			bundle_items = frappe.db.get_all('Product Bundle Item', {'parent': product_bundle, 'parenttype': 'Product Bundle'}, ['item_code'])
-			
-			check_key = [key for item in bundle_items if item.item_code == key[0]]
-			if not check_key:
-				self.validation_messages.append(_get_msg(row_num, _("Item {0} doesn't exist in Product Bundle {1}".format(key[0], self.item_parent))))
-			
-			self.validate_qty(row)
-			self.validate_batch_no(row.item_code, row)
-			self.validate_serial_no(row.item_code, row)
+		for row_num, row in enumerate(self.stock_entries):
+			if self.get("_action") and self._action == "submit":
+				self.validate_qty(row)
+				self.validate_batch_no(row.item_code, row)
+				self.validate_serial_no(row.item_code, row)
 			if flt(row.qty) < 0:
 				self.validation_messages.append(_get_msg(row_num, _("Negative Quantity is not allowed")))
 
@@ -85,7 +85,29 @@ class BundleDeliveryNote(Document):
 					msgprint(msg)
 
 				raise frappe.ValidationError(self.validation_messages)
-		
+	
+	def validate_excluded_items(self):
+		# excluded item of a bundle shouldn't be excluded more than once in the delivery note
+		excluded_items = frappe.db.sql(f"""
+		SELECT  parent_item , item_code
+		FROM `tabBundle Delivery Note Excluded Item` AS ExcludedItem , `tabBundle Delivery Note` AS DN
+		WHERE ExcludedItem.parent = DN.name AND DN.sales_order = '{self.sales_order}' AND DN.docstatus = 1 AND DN.name != '{self.name}'
+		""" , as_dict = True)
+		for item in self.excluded_items:
+			if frappe.db.exists("Delivery Note Item", {"against_sales_order": self.sales_order, "docstatus": 0}):
+				dn_name = frappe.db.get_value("Delivery Note Item", {"against_sales_order": self.sales_order, "docstatus": 0}, "parent")
+				delivery_note = frappe.get_doc("Delivery Note", dn_name)
+				for packed_item in delivery_note.get("packed_items"):
+					if packed_item.item_code == item.item_code and packed_item.parent_item == item.parent_item and packed_item.qty > 0:
+						frappe.throw(f"<b>{item.item_code}</b> in <b>{item.parent_item}</b> can't be excluded because it was delivered before")
+
+			for i in excluded_items:
+				if item.item_code == i.item_code and item.parent_item == i.parent_item:
+					frappe.throw(f"<b>{item.item_code}</b> in <b>{item.parent_item}</b> was excluded before")
+
+				
+
+
 	def validate_qty(self, row):
 		previous_sle = get_previous_sle(
 				{
@@ -140,66 +162,172 @@ class BundleDeliveryNote(Document):
 		stock_entry.submit()	
 
 	def create_delivery_note(self):
-		bundle_delivery_notes = frappe.db.get_all("Bundle Delivery Note", {"sales_order": self.sales_order, "name": ("!=", self.name), 'docstatus': 1}, 'delivery_note')
-		#print(f"\033[94m {bundle_delivery_notes}")
-		for bn in bundle_delivery_notes:
-			if bn.delivery_note:
-				self.delivery_note = bn.delivery_note
-				frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', bn.delivery_note)
+		if frappe.db.exists("Delivery Note Item", {"against_sales_order": self.sales_order, "docstatus": 0}):
+			dn_name = frappe.db.get_value("Delivery Note Item", {"against_sales_order": self.sales_order, "docstatus": 0}, "parent")
+			
+			delivery_note = frappe.get_doc("Delivery Note", dn_name)
+			if delivery_note.get("bdns"):
+				delivery_note.append("bdns", {"bundle_delivery_note": self.name, "status": 1})
+				delivery_note.save(ignore_permissions = True)
+				
+				self.delivery_note = dn_name
+				state = self.create_state()
+				self.set_alt_excluded_items(state)
+
+				frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', dn_name)
 				frappe.msgprint("Delivery Note is {0}".format('<a href="/app/delivery-note/'+ self.delivery_note + '" class="strong">'+ self.delivery_note + '</a>'))
-				return
+				frappe.db.commit()
+				return state
+
 		delivery_note = make_delivery_note(self.sales_order)
 		delivery_note.project = self.project
-		delivery_note.save()
-		self.delivery_note = delivery_note.name
-		frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', delivery_note.name)
-		frappe.db.commit()		
+		
+		delivery_note.append("bdns", {"bundle_delivery_note": self.name, "status": 1})
 
-		for item in delivery_note.items:
-			if not frappe.db.exists("Product Bundle", item.item_code):
-				frappe.delete_doc("Delivery Note Item", item.name)
-				frappe.db.commit()	
+		delivery_note.insert(ignore_permissions = True)
+		
+		self.delivery_note = delivery_note.name
+		frappe.db.set_value("Bundle Delivery Note", self.name, 'delivery_note', delivery_note.name)	
+		
+		state = self.create_state()
 
 		for packed_item in delivery_note.packed_items:
-			frappe.db.set_value("Packed Item", packed_item.name, 'qty', 0)
-			frappe.db.set_value("Packed Item", packed_item.name, 'serial_no', '')
-			frappe.db.set_value("Packed Item", packed_item.name, 'batch_no', '')
-			frappe.db.commit()
+			frappe.db.set_value("Packed Item", packed_item.name, {
+				'qty': 0, 'serial_no': '', 'batch_no': '', 
+				})
+			frappe.db.set_value("Delivery Note Item", packed_item.parent_detail_docname, "from_bundle_delivery_note", 1)
+			
+		frappe.db.commit()
 		frappe.msgprint("Delivery Note {0} has been created succesfully".format('<a href="/app/delivery-note/'+ delivery_note.name + '" class="strong">'+ delivery_note.name + '</a>'))
-		return				
+		return state			
+	
+	def create_state(self):
+		state = frappe.new_doc("Bundle Delivery Note State")
+		state.bundle_delivery_note = self.name
+		state.sales_order = self.sales_order
+		state.delivery_note = self.delivery_note
+		state.save(ignore_permissions = True)
+		return state
 
-	def setting_packed_items_values(self):
-		BDNs = frappe.db.get_all("Bundle Delivery Note", {'sales_order': self.sales_order, 'item_parent': self.item_parent, 'docstatus': 1}, 'name')
-		packed_items = frappe.db.get_all("Packed Item", {'parent': self.delivery_note, 'parent_item': self.item_parent}, ['name', 'item_code', 'warehouse'])
-		for packed_item in packed_items:
-			qty = 0
-			serial_no = batch_no = ''
-			warehouse = packed_item['warehouse']
-			for BDN in BDNs:
-				item_details = frappe.db.get_all("Bundle Delivery Note Item", {"parent": BDN.name, "item_code": packed_item.item_code}, ['batch_no', 'serial_no', 'qty', 'warehouse'])
-				if item_details:
-					qty += item_details[0]['qty']
-					warehouse = item_details[0]['warehouse']
-					if item_details[0]['serial_no']: serial_no += '\n' + item_details[0]['serial_no']
-					if item_details[0]['batch_no']: batch_no = item_details[0]['batch_no']
+	def set_alt_excluded_items(self, state):
+		if not self.get("excluded_items"): return
 
-			frappe.db.set_value("Packed Item", packed_item.name, 'qty', qty)
-			frappe.db.set_value("Packed Item", packed_item.name, 'warehouse', warehouse)
-			frappe.db.set_value("Packed Item", packed_item.name, 'batch_no', batch_no)
-			frappe.db.set_value("Packed Item", packed_item.name, 'serial_no', serial_no)
-			frappe.db.commit()
-		
-	def check_bundles(self):
-		isDone = check_bundles_of_parent_item(self.item_parent, self.sales_order)
-		messages = []
-		if not isDone: messages.append("Item <b>{0}</b> is not fully delivered yet".format(self.item_parent))
-		items = frappe.db.get_all("Sales Order Item", {'parent': self.sales_order}, 'item_code')
-		for item in items:
-			if frappe.db.exists('Product Bundle', item.item_code):
-				isDone = check_bundles_of_parent_item(item.item_code, self.sales_order)
-				if not isDone:
-					messages.append("Item <b>{0}</b> is not fully delivered yet".format(item.item_code))
+		delivery_note = frappe.get_doc("Delivery Note", self.delivery_note)
+		for excluded_item in self.excluded_items:
+			for pi_row in delivery_note.get("packed_items"):
+				if excluded_item.item_code == pi_row.item_code and\
+				excluded_item.parent_item == pi_row.parent_item:
+					if excluded_item.alt_item:
+						pi_row.excluded_item = excluded_item.item_code
+						pi_row.is_alternative = 1
+						pi_row.item_code = excluded_item.alt_item
+						pi_row.description = frappe.db.get_value("Item", pi_row.item_code, "stock_uom")
+						pi_row.uom = frappe.db.get_value("Item", pi_row.item_code, "stock_uom")
+						pi_row.rate = 0
+						packed_item = deepcopy(pi_row)
+						for item in delivery_note.items:
+							if item.item_code == packed_item.parent_item:
+								item_row = item
+								break
+						set_details(packed_item, item_row, pi_row, delivery_note)
+					else:
+						delivery_note.packed_items.remove(pi_row)
+						state_item = {
+						"parent_item": pi_row.parent_item,
+						"item_code": excluded_item.item_code,
+						"qty": 0,
+						"warehouse": pi_row.warehouse,
+						"serial_no": pi_row.get("serial_no"),
+						"is_removed": 1
+						}
+						state.append("items", state_item)
+					
+					break
+		delivery_note.save(ignore_permissions = True)
+		state.save(ignore_permissions = True)
 				
+
+	def setting_packed_items_values(self, state):
+		packed_items = {}
+		for item in self.stock_entries:
+			packed_items[item.item_code] = packed_items.get(item.item_code, 0) + item.qty
+
+		so_packed_items = frappe.db.get_all('Packed Item', {'parent': self.sales_order, 'parent_item': ('in', self.items)
+		}, ['parent_item', 'item_code', 'qty'])
+		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': self.delivery_note, 'parent_item': ('in', self.items), 'item_code': ('in', list(packed_items.keys()) )}, ['parent_item', 'item_code', 'excluded_item','qty'])
+		for so_pi in so_packed_items:
+			qty, i= 0, 0
+
+			packed_item_bdn = ""
+			for dn_pi in dn_packed_items:
+				if so_pi.parent_item == dn_pi.parent_item and ((so_pi.item_code == dn_pi.item_code) \
+				or (so_pi.item_code == dn_pi.excluded_item)):
+					qty = so_pi.qty - dn_pi.qty
+					packed_item_bdn = dn_pi.item_code
+					del dn_packed_items[i]
+					break
+				i =+ 1				
+
+			if not qty: continue
+
+			qty_state = 0
+			if packed_items[packed_item_bdn] >= qty:
+				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty', so_pi.qty)
+				packed_items[packed_item_bdn] -= qty 
+				qty_state = qty
+			else:
+				qty_state = packed_items[packed_item_bdn]
+				qty = frappe.db.get_value('Packed Item', {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty') 
+				packed_items[packed_item_bdn] = 0
+				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty', qty + qty_state )
+
+			item_details = frappe.db.get_all("Bundle Delivery Note Item", {"parent": self.name, "item_code": packed_item_bdn}, ['batch_no', 'serial_no', 'warehouse'])
+			if item_details:
+				batch, serial = frappe.db.get_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, ['batch_no', 'serial_no'])
+
+				if item_details[0]["batch_no"]: frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "batch_no", batch + item_details[0]["batch_no"])
+				if item_details[0]["serial_no"]: 
+					if serial: serial += '\n'
+					frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "serial_no", serial + item_details[0]["serial_no"])
+					
+				
+				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "warehouse", item_details[0]["warehouse"])				
+
+			state_item = {
+				"parent_item": so_pi.parent_item,
+				"item_code": packed_item_bdn,
+				"qty": qty_state,
+				"original_item": so_pi.item_code if so_pi.item_code != packed_item_bdn else "",
+				"warehouse": item_details[0]["warehouse"] if item_details else "",
+				"serial_no": item_details[0]["serial_no"] if item_details and item_details[0]["serial_no"] else ""
+			}
+			for row in self.get("excluded_items"):
+				if row.alt_item == packed_item_bdn and so_pi.parent_item == row.parent_item:
+					state_item["is_excluded"] = 1
+			
+			state.append("items", state_item)
+		
+		state.save(ignore_permissions = True)
+	
+	def check_bundles(self):
+		so_packed_items = frappe.db.get_all('Packed Item', {'parent': self.sales_order}, ['parent_item', 'item_code', 'qty'])
+		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': self.delivery_note}, ['parent_item', 'item_code', 'excluded_item','qty'])
+		messages = []
+		for so_pi in so_packed_items:
+			i, exists = 0, False
+			for dn_pi in dn_packed_items:
+				if dn_pi.parent_item == so_pi.parent_item and (dn_pi.item_code == so_pi.item_code or dn_pi.excluded_item == so_pi.item_code):
+					exists = True
+					if dn_pi.qty < so_pi.qty:
+						messages.append("Item <b>{0}</b> is not fully delivered yet".format(so_pi.parent_item))
+					del dn_packed_items[i]
+					break
+				i += 1
+		
+		if not exists:
+			if not is_excluded(so_pi, self.sales_order):
+				messages.append("Item <b>{0}</b> is not fully delivered yet".format(so_pi.parent_item))
+		
 		if not messages:
 			cancel_stock_entries(self.name)
 			BDNs = frappe.db.get_all('Bundle Delivery Note', {'sales_order': self.sales_order, 'docstatus': 1}, 'name')
@@ -211,17 +339,42 @@ class BundleDeliveryNote(Document):
 			frappe.msgprint("<br>".join(list(set(messages))))
 
 	def remove_packed_items(self):
-		if self.get("delivery_note"):
+		if self.get("delivery_note") and frappe.db.exists("Bundle Delivery Note State", self.name):
 			delivery_note = frappe.get_doc("Delivery Note", self.delivery_note)
-			for item in self.stock_entries:
+			bdn_state = frappe.get_doc("Bundle Delivery Note State", self.name)
+			for item in bdn_state.items:
+				if item.is_removed:
+					add_removed_item(item, delivery_note)
+					continue
 				for p_item in delivery_note.packed_items:
-					if p_item.item_code == item.item_code and p_item.parent_item == self.item_parent:
-						frappe.db.set_value("Packed Item", p_item.name, 'qty', p_item.qty - item.qty)
+					if (p_item.item_code == item.item_code or p_item.get("excluded_item") == item.item_code or p_item.item_code == item.get("original_item")) and p_item.parent_item == item.parent_item:
+						p_item.qty -= item.qty
+						
+						if p_item.get("serial_no") and item.get("serial_no"):
+							p_item.serial_no = p_item.serial_no.replace(item.serial_no, "")
+							serial = ""
+							for line in p_item.serial_no.split('\n'):
+								serial += line + "\n"
+							p_item.serial_no = serial
+
+						if p_item.get("excluded_item") == item.get("original_item") and item.get("is_excluded"): 
+							p_item.item_code = item.original_item
+							p_item.excluded_item = ""
+							p_item.is_alternative = 0
+							p_item.description = frappe.db.get_value("Item", p_item.item_code, "description")
+							p_item.uom = frappe.db.get_value("Item", p_item.item_code, "stock_uom")
+							bundle_item = deepcopy(p_item)
+							for item in delivery_note.items:
+								if item.item_code == p_item.parent_item:
+									item_row = item
+									break
+							set_details(bundle_item, item_row, p_item, delivery_note)
 						break
+			delivery_note.save(ignore_permissions = True)
+			bdn_state.delete(ignore_permissions = True)
 			
 
 	def submit_delivery_note(self):
-		self.setting_packed_items_values()
 		bundle_delivery_notes = frappe.db.get_list("Bundle Delivery Note", {
 			"delivery_note": self.delivery_note, 
 			"name": ("!=", self.name)
@@ -262,6 +415,19 @@ def cancel_stock_entries(bundle_delivery_note):
 			stock_entry.from_bundle_delivery_note = ''
 			stock_entry.cancel()
 
+def is_excluded(item, sales_order):
+		bdns = frappe.db.get_all("Bundle Delivery Note", {"sales_order": sales_order, "docstatus": 1}, "name")
+		for bdn in bdns:
+			doc = frappe.get_doc("Bundle Delivery Note", bdn.name)
+			if not doc.excluded_items: continue
+
+			for excluded in doc.excluded_items:
+				if excluded.item_code == item.item_code and\
+				excluded.parent_item == item.parent_item and\
+				not excluded.alt_item:
+					return True
+
+		return False
 
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
@@ -269,48 +435,97 @@ def get_bundle_items(doctype, txt, searchfield, start, page_len, filters):
 	return frappe.db.sql("""
 		SELECT pbi.item_code FROM `tabProduct Bundle` as pb 
 		INNER JOIN `tabProduct Bundle Item` as pbi ON pb.new_item_code = pbi.parent
-		WHERE pb.new_item_code = %(parent)s
-	""",{"parent": filters.get("parent")})
+		WHERE pb.new_item_code = %(parent)s and pbi.name like %(txt)s
+	""",{"parent": filters.get("parent"), "txt": "%" + txt + "%"})
 
 
 @frappe.whitelist()
-def get_items(sales_order = None, item_parent = None, item_code = None):
-	if not item_parent and not item_code:
+def get_items(**kwargs):
+	if not kwargs.get("parents") or not kwargs.get("sales_order"):
 		return
-	if not item_parent and item_code:
-		return [{'item_code': item_code, 'qty':0}]
-
-	if not sales_order: return
 
 	delivery_note = ''
+	sales_order = kwargs.get('sales_order')
 	for bdn in frappe.db.get_all("Bundle Delivery Note", {"sales_order": sales_order, "docstatus": 1}, "delivery_note"):
 		if bdn.delivery_note:
 			delivery_note = bdn.delivery_note
 			break
-	if item_code:
-		if not delivery_note:
-			details = frappe.db.get_all("Packed Item", {'parent': sales_order, 'parent_item': item_parent, 'item_code': item_code}, ['item_name','qty', 'warehouse', 'rate', 'uom'])
-			return [{'item_code': item_code, 'qty':details[0]['qty'], 'item_name': details[0]['item_name'], 'warehouse': details[0]['warehouse'], 'rate': details[0]['rate'], 'uom': details[0]['uom']}]
 
-		q1 = frappe.db.get_value("Packed Item", {'parent': sales_order, 'parent_item': item_parent, 'item_code': item_code}, 'qty') 
-		q2 = frappe.db.get_value("Packed Item", {'parent': delivery_note, 'parent_item': item_parent, 'item_code': item_code}, 'qty')
-		qty = q1 - q2
-		if qty == 0: return
-		details = frappe.db.get_all("Packed Item", {'parent': sales_order, 'parent_item': item_parent, 'item_code': item_code}, ['item_name', 'warehouse', 'rate', 'uom'])
-		return [{'item_code': item_code, 'qty':qty ,'item_name': details[0]['item_name'], 'warehouse': details[0]['warehouse'], 'rate': details[0]['rate'], 'uom': details[0]['uom']}]
+	parents_list = kwargs.get("parents")
+
+	if isinstance(parents_list, string_types):
+		parents_list = json.loads(parents_list)
+
+	warehouses = {}
+	parents = "("
+	for item_parent in parents_list:
+		parents += " '{}',".format(item_parent)
+	parents = parents[:-1]
+	parents += ")" 
+
+	if not delivery_note:
+		return frappe.db.sql("""
+			select item_code, item_name, sum(qty) as qty, warehouse, rate, uom
+			from `tabPacked Item`
+			where parent = '{0}' and parent_item in {1} 
+			group by item_code, warehouse, rate
+		""".format(sales_order, parents), as_dict = 1)
 	else:
-		packed_items_so = frappe.db.get_all("Packed Item", {'parent': sales_order, 'parent_item': item_parent}, ['item_code', 'qty', 'item_name', 'warehouse', 'rate', 'uom'])
-		if not delivery_note: return packed_items_so
-		items = []
-		packed_items_dn = frappe.db.get_all("Packed Item", {'parent': delivery_note, 'parent_item': item_parent}, ['item_code', 'qty'])
-		for packed_item_dn in packed_items_dn:
-			for packed_item_so in packed_items_so:
-				if packed_item_dn.item_code == packed_item_so.item_code:
-					qty = packed_item_so.qty - packed_item_dn.qty
-					if qty > 0:
-						items.append({'item_code': packed_item_so.item_code, 'qty': qty, 'item_name': packed_item_so.item_name, 'warehouse': packed_item_so.warehouse, 'rate': packed_item_so.rate, 'uom': packed_item_so.uom})
+		items = {}
+		so_packed_items = frappe.db.get_all('Packed Item', {'parent': sales_order, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty'])
+		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': delivery_note, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty', 'excluded_item'])
+		for so_pi in so_packed_items:
+			i = 0
+			for dn_pi in dn_packed_items:
+				if dn_pi.parent_item == so_pi.parent_item and (dn_pi.item_code == so_pi.item_code or so_pi.item_code == dn_pi.excluded_item):
+					if dn_pi.qty < so_pi.qty:
+						qty = so_pi.qty - dn_pi.qty
+						items[dn_pi.item_code] = items.get(dn_pi.item_code, 0) + qty
+						del dn_packed_items[i]
 					break
-		return items
+				i += 1
+	
+		itemslist = []
+		for item in items.keys():
+			items_details = frappe.db.get_value('Packed Item', {'parent': delivery_note, "item_code" : item}, ['item_code', 'item_name', 'warehouse', 'uom', 'rate'], as_dict = 1)
+			items_details['qty'] = items[item]
+			itemslist.append(items_details)
+		return itemslist
+	
+def add_removed_item(bundle_item, delivery_note):
+	pi_row = delivery_note.append("packed_items", {})
+	for item in delivery_note.items:
+		if item.item_code == bundle_item.parent_item:
+			item_row = item
+			break
+	if not item_row: return
+	bundle_item.description = frappe.db.get_value("Item", bundle_item.item_code, "description")
+	bundle_item.uom = frappe.db.get_value("Item", bundle_item.item_code, "stock_uom")
+	bundle_item.qty = 0
+
+	set_details(bundle_item, item_row, pi_row, delivery_note)
+
+	res = frappe.db.sql("""
+	select sum(item.qty) from `tabBundle Delivery Note State Item` as item
+	inner join `tabBundle Delivery Note State` as state on state.name = item.parent
+	where state.delivery_note = '{0}' and item.item_code = '{1}' and item.parent_item = '{2}'
+	group by item.item_code
+	""".format(delivery_note.name, bundle_item.get("item_code"), bundle_item.get("parent_item")), as_list = 1)
+	if res: pi_row.qty = res[0][0]
+	
+def set_details(bundle_item, item_row, pi_row, delivery_note):
+	from erpnext.stock.doctype.packed_item.packed_item import (
+		get_packed_item_details,
+		update_packed_item_basic_data,
+		update_packed_item_stock_data,
+		update_packed_item_price_data,
+		update_packed_item_from_cancelled_doc
+	)
+	item_data = get_packed_item_details(bundle_item.item_code, delivery_note.company)
+	update_packed_item_basic_data(item_row, pi_row, bundle_item, item_data)
+	update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, delivery_note)
+	update_packed_item_price_data(pi_row, item_data, delivery_note)
+	update_packed_item_from_cancelled_doc(item_row, bundle_item, pi_row, delivery_note)
 
 def delete_dn(bdn, delivery_note):
 	doc = frappe.get_doc("Delivery Note", delivery_note)
@@ -320,4 +535,161 @@ def delete_dn(bdn, delivery_note):
 		frappe.db.set_value("Bundle Delivery Note", bdn, "delivery_note", "")	
 		if doc.docstatus == 0:
 			doc.delete()
-			frappe.db.commit()
+
+def remove_bdn(bdn, delivery_note):
+	doc = frappe.get_doc("Delivery Note", delivery_note)
+	bdnlist = []
+	if doc.get("bdns"):
+		i = 1
+		for row in doc.bdns:
+			if row.bundle_delivery_note != bdn:
+				row.idx = i
+				bdnlist.append(row)
+				i += 1
+		doc.update({"bdns": bdnlist})
+		doc.save()
+
+
+@frappe.whitelist()
+def get_reminded_bundle_items(sales_order):
+	if frappe.db.exists("Delivery Note Item", {"against_sales_order": sales_order, "docstatus": 0}):
+		return frappe.db.sql(
+			"""
+			select distinct item.item_code 
+			from `tabDelivery Note Item` as item
+			inner join `tabSales Order Item` as so_item on so_item.name = item.so_detail
+			inner join `tabPacked Item` as so_packed_item on so_packed_item.parent = so_item.parent and so_item.name = so_packed_item.parent_detail_docname
+			inner join `tabPacked Item` as dn_packed_item on item.parent = dn_packed_item.parent and item.name = dn_packed_item.parent_detail_docname
+			where item.against_sales_order = '{0}' and item.docstatus = 0 and so_item.docstatus = 1
+			and so_packed_item.qty > dn_packed_item.qty
+			and so_item.delivered_qty < so_item.qty and so_item.delivered_by_supplier != 1
+			group by item.item_code
+			""".format(sales_order),
+		as_dict = 1)
+	else:
+		return frappe.db.sql(
+			"""
+			select distinct so_item.item_code 
+			from `tabSales Order Item` as so_item
+			inner join `tabPacked Item` as so_packed_item on so_packed_item.parent = so_item.parent and so_item.name = so_packed_item.parent_detail_docname
+			where so_item.parent = '{0}' and so_item.docstatus = 1
+			and so_item.delivered_qty < so_item.qty and so_item.delivered_by_supplier != 1
+			group by so_item.item_code
+			""".format(sales_order),
+		as_dict = 1)
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def get_parents_items(doctype, txt, searchfield, start, page_len, filters):
+	return frappe.db.sql("""
+		SELECT item_code 
+		FROM `tabBundle Delivery Note Parent Item` 	
+		WHERE parent = %(parent)s and item_code like %(txt)s OR item_code = %(item_parent)s
+	""",{"parent": filters.get("parent") , "item_parent": filters.get("item_parent"), "txt": "%" + txt + "%"})
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def get_packed_items(doctype, txt, searchfield, start, page_len, filters):
+	query ="""
+		SELECT bdni.item_code 
+		FROM `tabBundle Delivery Note Item` as bdni 
+		"""
+	strwhere = """
+		WHERE bdni.parent = %(parent)s and bdni.item_code like %(txt)s
+		"""
+
+	if filters.get("parent_item"):
+		query += """
+		  inner join `tabProduct Bundle Item` as Pbi on Pbi.item_code = bdni.item_code
+		  inner join `tabProduct Bundle` as Pb on Pb.name = Pbi.parent
+		"""
+		strwhere += """
+			and Pb.new_item_code = %(parent_item)s 
+		"""
+
+	query += strwhere
+	return frappe.db.sql(query, {
+		"parent": filters.get("parent"), "txt": "%" + txt + "%", "parent_item": filters.get("parent_item")
+		})
+
+@frappe.whitelist()
+def get_item_qty(item_code, parent_item, sales_order):
+	if not frappe.db.exists("Delivery Note Item", {"against_sales_order": sales_order, "docstatus": 0}):
+		return frappe.db.get_value("Packed Item", {"parent": sales_order, "parent_item": parent_item, "item_code": item_code}, "qty")
+	
+	delivery_note = frappe.db.get_value("Delivery Note Item", {"against_sales_order": sales_order, "docstatus": 0}, "parent")
+
+	so_qty= frappe.db.get_value('Packed Item', {'parent': sales_order, "parent_item": parent_item,"item_code": item_code}, 'qty')
+	dn_qty = frappe.db.get_value('Packed Item', {'parent': delivery_note, "parent_item": parent_item, "item_code": item_code}, 'qty')
+	if not dn_qty: return so_qty
+	return so_qty - dn_qty
+
+@frappe.whitelist()
+def update_items(stock_entries, excluded_items , sales_order , price_list, company):
+	# Handling excluded items
+	stock_entries = json.loads(stock_entries)
+	excluded_items = json.loads(excluded_items)
+	stock_entries_new_items_list = []
+	deleted_items_list = []
+	items = deepcopy(stock_entries)
+	for item in excluded_items:
+		alt_item_found = False
+		item['qty'] = get_item_qty(item["item_code"], item["parent_item"], sales_order)
+		for i in items:
+			item_code_zero_qty = None
+			deleted_item_code = None				
+
+			if item["item_code"] == i["item_code"]:
+				if not item["qty"] and not item.get('alt_item') or item.get('alt_item') == "":
+					i["qty"] = 0
+				i["qty"]  = i["qty"] - item["qty"]
+				if i["qty"] <= 0:
+					deleted_items_list.append(i["item_code"])
+
+			if item.get('alt_item') and item.get('alt_item') == i["item_code"]:
+				alt_item_found = True
+				i["qty"] = i["qty"]  + item["qty"]					
+
+		if item.get('alt_item') and not alt_item_found:
+			conversion_rate = frappe.db.get_value("Sales Order", sales_order ,"conversion_rate")
+			price_list_rate = frappe.db.get_value("Item Price", {'item_code': item["alt_item"], 'price_list': price_list},"price_list_rate")
+			items.append({
+				"item_code" : item["alt_item"],
+				"qty" : item["qty"],
+				"warehouse" : item["warehouse"] if item.get("warehouse") else get_item_warehouse(frappe.get_doc("Item", item["alt_item"]), args = frappe._dict({"company": company}), overwrite_warehouse = True),
+				"item_name" : frappe.db.get_value('Item' , i["item_code"] , 'item_name'),				
+				"uom" : frappe.db.get_value("Item", item["alt_item"], "stock_uom"),
+				"rate" : price_list_rate / conversion_rate if price_list_rate else 0 ,
+				"currency" : frappe.db.get_value("Sales Order", sales_order, "currency")
+			})
+	for i in items:
+		if i["item_code"] not in deleted_items_list:
+			values = {
+				"doctype" : "Bundle Delivery Note Item",
+				"item_code" : i["item_code"],
+				"item_name" : i["item_name"],
+				"qty" : i["qty"],
+				"warehouse" : i["warehouse"],					
+				"uom" : i["uom"],
+				"rate" : i["rate"],
+				"currency" : i["currency"]
+			}
+			stock_entries_new_items_list.append(values)
+	return {"stock_entries" : stock_entries_new_items_list }	
+	# self.update({"excluded_items" : []})
+
+@frappe.whitelist()
+def get_alt_details(item_code, sales_order, price_list, company, has_warehouse = False):
+	message = {}
+	conversion_rate, currency = frappe.db.get_value("Sales Order", sales_order, ["conversion_rate", "currency"])
+	price_list_rate = frappe.db.get_value("Item Price", {
+		'item_code': item_code, 'price_list': price_list},
+			'price_list_rate') 
+	message['rate'] = price_list_rate / conversion_rate if price_list_rate else 0.00
+	message['uom'] = frappe.db.get_value("Item", item_code, "stock_uom")
+	message['currency'] = currency
+	message['item_name'] = frappe.db.get_value("Item", item_code, "item_name")
+	if not has_warehouse or has_warehouse == 'false': 
+		ware = get_item_warehouse(frappe.get_doc("Item", item_code), args = frappe._dict({"company": company}), overwrite_warehouse = True)
+		message['warehouse'] = ware
+	return message
