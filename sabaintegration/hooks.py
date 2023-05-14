@@ -94,9 +94,9 @@ permission_query_conditions = {
 	"Quotation": "sabaintegration.www.permissions.quotation_query"
 }
 #
-# has_permission = {
-#  	"Event": "sabaintegration.www.permissions.has_permission",
-# }
+has_permission = {
+ 	"Event": "sabaintegration.www.permissions.has_permission",
+}
 
 # DocType Class
 # ---------------

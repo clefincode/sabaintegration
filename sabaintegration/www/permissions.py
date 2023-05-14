@@ -22,3 +22,11 @@ def quotation_query(user):
     """.format(user=frappe.db.escape(user), roles = strroles)
     
     return strWhere
+
+def has_permission(doc, user):
+    from frappe.permissions import has_permission
+    if doc.event_type == "Public" or doc.owner == user:
+        return True
+    if has_permission("Event", user = user, ptype = "write"):
+        return True
+    return False
