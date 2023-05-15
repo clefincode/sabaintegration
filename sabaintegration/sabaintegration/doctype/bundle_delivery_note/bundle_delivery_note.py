@@ -266,8 +266,7 @@ class BundleDeliveryNote(Document):
 					packed_item_bdn = dn_pi.item_code
 					del dn_packed_items[i]
 					break
-				i =+ 1				
-
+				i += 1		
 			if not qty: continue
 
 			qty_state = 0
