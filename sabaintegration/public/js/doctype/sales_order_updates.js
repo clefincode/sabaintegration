@@ -112,7 +112,7 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 		let itemslist = await frappe.call({
 			"method": "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_reminded_bundle_items",
 			"args": {
-				"sales_order": me.frm.doc.name
+				"sales_order_name": me.frm.doc.name
 			},
 			"freeze": true,
 			callback: function(r){

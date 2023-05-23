@@ -550,27 +550,36 @@ def remove_bdn(bdn, delivery_note):
 
 
 @frappe.whitelist()
-def get_reminded_bundle_items(sales_order):
-	if frappe.db.exists("Delivery Note Item", {"against_sales_order": sales_order, "docstatus": 0}):
-		return frappe.db.sql(
-			"""
-			select distinct item.item_code 
-			from `tabDelivery Note Item` as item
-			inner join `tabSales Order Item` as so_item on so_item.name = item.so_detail
-			inner join `tabPacked Item` as so_packed_item on so_packed_item.parent = so_item.parent and so_item.name = so_packed_item.parent_detail_docname
-			inner join `tabPacked Item` as dn_packed_item on item.parent = dn_packed_item.parent and item.name = dn_packed_item.parent_detail_docname
-			where item.against_sales_order = '{0}' and item.docstatus = 0 and so_item.docstatus = 1
-			and so_packed_item.qty > dn_packed_item.qty
-			and so_item.delivered_qty < so_item.qty and so_item.delivered_by_supplier != 1
-			group by item.item_code
-			""".format(sales_order),
-		as_dict = 1)
+def get_reminded_bundle_items(sales_order_name):
+	if frappe.db.exists("Delivery Note Item", {"against_sales_order": sales_order_name, "docstatus": 0}):
+		sales_order = frappe.get_doc("Sales Order", sales_order_name)
+		delivery_note_name = frappe.db.get_value("Delivery Note Item", {"against_sales_order": sales_order_name, "docstatus": 0}, "parent")
+		
+		parent_items = []
+
+		for sales_item in sales_order.items:
+			if sales_item.delivered_qty >= sales_item.qty or sales_item.delivered_by_supplier == 1: continue
+
+			so_packed_items = frappe.db.get_all("Packed Item", {"parent": sales_order_name, "parent_item": sales_item.item_code}, ["*"])
+			dn_packed_items = frappe.db.get_all("Packed Item", {"parent": delivery_note_name, "parent_item": sales_item.item_code}, ["*"])
+			toadd = True
+			for so_pi in so_packed_items:
+				for dn_pi in dn_packed_items:
+					if so_pi.parent_item == dn_pi.parent_item and ((so_pi.item_code == dn_pi.item_code) \
+					or (so_pi.item_code == dn_pi.excluded_item)):
+						if so_pi.qty > dn_pi.qty:
+							toadd = True
+							break
+				if toadd:
+					parent_items.append({"item_code": sales_item.item_code})
+					break
+		return parent_items
+
 	else:
 		return frappe.db.sql(
 			"""
 			select distinct so_item.item_code 
 			from `tabSales Order Item` as so_item
-			inner join `tabPacked Item` as so_packed_item on so_packed_item.parent = so_item.parent and so_item.name = so_packed_item.parent_detail_docname
 			where so_item.parent = '{0}' and so_item.docstatus = 1
 			and so_item.delivered_qty < so_item.qty and so_item.delivered_by_supplier != 1
 			group by so_item.item_code
