@@ -87,7 +87,38 @@ frappe.ui.form.on('Quotation', {
 			}
 			});			
         }
-	}
+		frm.events.set_base_rates();
+		if (frm.is_new()){
+			frappe.model.set_value(frm.doc.doctype, frm.doc.name, "costs_template", "Projects Indirect Cost Analysis");
+		}
+
+	},
+	conversion_rate: function(frm) {
+		frm.events.set_rates_without_margin(frm);
+	},
+	set_rates_without_margin(frm){
+		for (let i of frm.doc.items){
+			i.rate_without_profit_margin = i.base_rate_without_profit_margin / frm.doc.conversion_rate;
+			if (i.margin_rate_or_amount !== undefined && i.margin_rate_or_amount > 0)
+				i.margin_rate_or_amount = (i.base_rate - i.base_price_list_rate) / frm.doc.conversion_rate;
+			let discount_amount = (i.base_price_list_rate - i.base_rate) / frm.doc.conversion_rate;
+			if (discount_amount > 0) i.discount_amount = discount_amount
+			else i.discount_amount = 0
+		}
+		cur_frm.refresh_field("items");
+	},
+
+	set_base_rates: function(){
+		let conversion_rate = cur_frm.doc.conversion_rate;
+		for (let i of cur_frm.doc.items){
+			if (i.base_rate_without_profit_margin == undefined || 
+				i.base_rate_without_profit_margin == 'undefined' ||
+				i.base_rate_without_profit_margin == 0){
+					i.base_rate_without_profit_margin = i.rate_without_profit_margin * conversion_rate;
+			}	
+		}
+	},
+
 });
 
 erpnext.selling.CustomQuotationController = class CustomQuotationController extends erpnext.selling.QuotationController {
@@ -111,15 +142,21 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 		super.refresh(doc, dt, dn);
 		this.set_dynamic_labels();
 	}
-	currency() {
-		super.currency();
-		this.set_dynamic_labels();
+	async currency() {
+		this.set_margin_amount()
+		await super.currency();
 	}
 	customer() {
 		var me = this;
 		erpnext.utils.get_party_details(this.frm, null, null, function() {
 			me.apply_price_list();
 		});
+	}
+
+	set_margin_amount(conversion_rate){
+		for (let i of cur_frm.doc.items){
+			i.margin_type = '';
+		}
 	}
 
 	sales_partner() {
@@ -163,6 +200,21 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 
 		// this.frm.toggle_display(["total_rate_without_margin", "total_items_markup_value",
 		// 	"expected_profit_loss_value"], this.frm.doc.price_list_currency != company_currency);
+		this.frm.set_currency_labels([
+			"base_rate_without_profit_margin"
+		], company_currency, "items");
+
+		this.frm.set_currency_labels([
+			"base_cost_value"
+		], company_currency, "costs");
+
+		this.frm.set_currency_labels([
+			"rate_without_profit_margin"
+		], this.frm.doc.currency, "items");
+
+		this.frm.set_currency_labels([
+			"cost_value"
+		], this.frm.doc.currency, "costs");
 	}
 	campaign() {
 		this.apply_pricing_rule();
@@ -198,6 +250,7 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 				d.margin_from_supplier_quotation = me.frm.doc.total_margin;
 				d.rate = d.rate_without_profit_margin + (d.rate_without_profit_margin * d.margin_from_supplier_quotation  / 100)
 				d.amount = d.rate * d.qty;
+				d.margin_rate_or_amount = d.rate - d.price_list_rate;
 			});
 			cur_frm.cscript.calculate_taxes_and_totals();
 			me.frm.doc.total_items_markup_value = me.frm.doc.total - me.frm.doc.total_rate_without_margin
@@ -244,18 +297,22 @@ frappe.ui.form.on('Quotation Item', {
 	},
 	margin_from_supplier_quotation: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
-		frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+		//frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
 		//frappe.model.set_value(cdt, cdn, "price_list_rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+		d.rate = d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin)
+		d.margin_type = "Amount";
+		d.margin_rate_or_amount = d.rate - d.price_list_rate;
 		sabaintegration.calculate_total_margin(frm);
 	},
 	rate: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
-		console.log(d.rate_without_profit_margin)
 		if (!d.rate_without_profit_margin){
 			if (d.from_buying_price_list == '' || 
 			d.from_buying_price_list == undefined || 
-			d.from_buying_price_list == 'undifined')
+			d.from_buying_price_list == 'undifined'){
 				d.rate_without_profit_margin = d.price_list_rate
+				d.base_rate_without_profit_margin = d.base_price_list_rate;
+			}
 			else {
 				set_buying_rate(frm, d)
 			}
@@ -290,7 +347,7 @@ frappe.ui.form.on('Quotation Item', {
 	rate_without_profit_margin: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		var margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
-		frappe.model.set_value(cdt, cdn, "margin_from_supplier_quotation", margin_from_supplier_quotation)
+		d.margin_from_supplier_quotation = margin_from_supplier_quotation;
 		sabaintegration.set_total_without_margin(frm);
 		sabaintegration.calculate_total_margin(frm);
 	}
@@ -434,6 +491,7 @@ const set_buying_rate = function(frm, d){
 			if (r.message && r.message[0]){
 				let conversion_rate = 1;
 				if (frm.doc.conversion_rate) conversion_rate = frm.doc.conversion_rate
+				d.base_rate_without_profit_margin = r.message[0][1];
 				d.rate_without_profit_margin = r.message[0][1] / conversion_rate;
 				d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
 				frm.refresh_fields("items")

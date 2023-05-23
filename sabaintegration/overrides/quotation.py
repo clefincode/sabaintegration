@@ -105,6 +105,7 @@ class CustomQuotation(Quotation):
 	def update_total_margin(self):
 		self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
 		for item in self.items:
+			item.base_rate_without_profit_margin = item.rate_without_profit_margin * self.conversion_rate
 			self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
 			self.total += flt(item.amount, item.precision("amount"))
 		self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate

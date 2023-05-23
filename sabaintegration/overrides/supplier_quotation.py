@@ -457,6 +457,7 @@ def make_quotation(source_name, target_doc=None):
                             fields = {
                                 "rate": total_rate_with_margin,
                                 "rate_without_profit_margin": total_rate,
+                                "base_without_profit_margin": total_rate * conversion_rate,
                                 #"price_list_rate": total_rate_with_margin,
                                 "margin_from_supplier_quotation": (total_rate_with_margin - total_rate) / total_rate * 100 if total_rate else 0,
                                 "opportunity_option_number": row.opportunity_option_number,
@@ -481,6 +482,7 @@ def make_quotation(source_name, target_doc=None):
                                     else:
                                         item.rate += total_rate_with_margin
                                         item.rate_without_profit_margin += total_rate
+                                        item.base_without_profit_margin = item.rate_without_profit_margin * conversion_rate,
                                     #item.price_list_rate += total_rate_with_margin
                                     if item.rate_without_profit_margin: 
                                         item.margin_from_supplier_quotation = (item.rate - item.rate_without_profit_margin) / item.rate_without_profit_margin * 100
@@ -496,6 +498,7 @@ def make_quotation(source_name, target_doc=None):
                                 "rate": rate_with_profit_margin,
                                 #"price_list_rate": rate_with_profit_margin,
                                 "rate_without_profit_margin": rate_without_profit_margin,
+                                "base_without_profit_margin": rate_without_profit_margin * conversion_rate,
                                 "margin_from_supplier_quotation": profit_margin,
                                 "opportunity_option_number": row.opportunity_option_number,
                                 "opportunity": row.opportunity,
