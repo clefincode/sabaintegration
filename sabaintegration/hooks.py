@@ -110,7 +110,7 @@ override_doctype_class = {
 	'Request for Quotation': 'sabaintegration.overrides.request_for_quotation.CustomRequestforQuotation',
 	'Quotation': 'sabaintegration.overrides.quotation.CustomQuotation',
 	'ToDo': 'sabaintegration.overrides.todo.CustomToDo',
-	'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
+	#'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
 	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry',
     'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
     'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder'
@@ -120,13 +120,11 @@ override_doctype_class = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-#	}
-# }
+doc_events = {
+    "Employee": {
+        "validate": "sabaintegration.overrides.employee.custom_validate"
+    }
+}
 
 # Scheduled Tasks
 # ---------------

@@ -12,7 +12,7 @@ class CustomToDo(ToDo):
         self.share_with_leaders() 
 
     def share_with_leaders(self):
-        employees = get_leaders(self.owner)
+        employees = get_leaders(self.allocated_to)
         if employees:
             from frappe.share import add_docshare
             for employee in employees:
