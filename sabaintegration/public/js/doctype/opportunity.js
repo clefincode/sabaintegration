@@ -30,7 +30,7 @@ frappe.ui.form.on("Opportunity", {
     onload(frm){
         if (frm.doc.items) frm.trigger("set_option");
         //for submitted option to stay read only after refresh
-        for (let i=0; i<frm.all_options.length - 1; i++){
+        for (let i=0; i<frm.all_options.length; i++){
             let option = frm.all_options[i].replace('_','')
             if (frm.doc[option + 'status'] == "1" ){
                 frm.set_df_property(frm.all_options[i], "read_only", 1);
@@ -323,7 +323,7 @@ frappe.ui.form.on("Opportunity", {
         }
     },
     scheck_option_status: function(frm){
-        for (let i=0; i<frm.all_options.length - 1; i++){
+        for (let i=0; i<frm.all_options.length; i++){
             let option_name = frm.all_options[i].replace('_','')
             if (!frm.fields_dict[frm.all_options[i]].grid.df.hidden) {
                 frm.set_df_property(option_name + '_submit', 'hidden', 0);
@@ -331,7 +331,8 @@ frappe.ui.form.on("Opportunity", {
                 if (frm.doc[option_name + 'status'] == "1" ){
                     frm.set_df_property(option_name + '_submit', 'hidden', 1);
                 }// Custom update end
-                frm.set_df_property(option_name + '_copy', 'hidden', 0);
+                if (option_name != "option10")
+                    frm.set_df_property(option_name + '_copy', 'hidden', 0);
             }
             else {
                 frm.set_df_property(option_name + '_submit', 'hidden', 1);
