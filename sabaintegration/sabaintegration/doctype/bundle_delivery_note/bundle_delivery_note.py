@@ -253,30 +253,31 @@ class BundleDeliveryNote(Document):
 			packed_items[item.item_code] = packed_items.get(item.item_code, 0) + item.qty
 
 		so_packed_items = frappe.db.get_all('Packed Item', {'parent': self.sales_order, 'parent_item': ('in', self.items)
-		}, ['parent_item', 'item_code', 'qty'])
-		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': self.delivery_note, 'parent_item': ('in', self.items), 'item_code': ('in', list(packed_items.keys()) )}, ['parent_item', 'item_code', 'excluded_item','qty'])
+		}, ['parent_item', 'item_code', 'qty'], order_by = "idx")
+		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': self.delivery_note, 'parent_item': ('in', self.items), 'item_code': ('in', list(packed_items.keys()) )}, 
+		['name','parent_item', 'item_code', 'excluded_item','qty'], order_by = "idx")
 		for so_pi in so_packed_items:
 			qty, i= 0, 0
-
+			packed_name = ''
 			packed_item_bdn = ""
 			for dn_pi in dn_packed_items:
 				if so_pi.parent_item == dn_pi.parent_item and ((so_pi.item_code == dn_pi.item_code) \
 				or (so_pi.item_code == dn_pi.excluded_item)):
 					qty = so_pi.qty - dn_pi.qty
 					packed_item_bdn = dn_pi.item_code
+					packed_name = dn_pi.name
 					del dn_packed_items[i]
 					break
 				i += 1		
-			if not qty: continue
-
+			if not qty or qty < 0: continue
 			qty_state = 0
 			if packed_items[packed_item_bdn] >= qty:
-				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty', so_pi.qty)
+				frappe.db.set_value("Packed Item", {'name': packed_name}, 'qty', so_pi.qty)
 				packed_items[packed_item_bdn] -= qty 
 				qty_state = qty
 			else:
 				qty_state = packed_items[packed_item_bdn]
-				qty = frappe.db.get_value('Packed Item', {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty') 
+				qty = frappe.db.get_value('Packed Item', {'name': packed_name}, 'qty') 
 				packed_items[packed_item_bdn] = 0
 				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, 'qty', qty + qty_state )
 
@@ -471,8 +472,8 @@ def get_items(**kwargs):
 		""".format(sales_order, parents), as_dict = 1)
 	else:
 		items = {}
-		so_packed_items = frappe.db.get_all('Packed Item', {'parent': sales_order, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty'])
-		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': delivery_note, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty', 'excluded_item'])
+		so_packed_items = frappe.db.get_all('Packed Item', {'parent': sales_order, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty'], order_by = "idx")
+		dn_packed_items = frappe.db.get_all('Packed Item', {'parent': delivery_note, "parent_item": ("in", parents_list)}, ['parent_item', 'item_code', 'qty', 'excluded_item'], order_by = "idx")
 		for so_pi in so_packed_items:
 			i = 0
 			for dn_pi in dn_packed_items:
@@ -481,7 +482,7 @@ def get_items(**kwargs):
 						qty = so_pi.qty - dn_pi.qty
 						items[dn_pi.item_code] = items.get(dn_pi.item_code, 0) + qty
 						del dn_packed_items[i]
-					break
+						break
 				i += 1
 	
 		itemslist = []
@@ -559,9 +560,33 @@ def get_reminded_bundle_items(sales_order_name):
 
 		for sales_item in sales_order.items:
 			if sales_item.delivered_qty >= sales_item.qty or sales_item.delivered_by_supplier == 1: continue
+			so_packed_items = frappe.db.sql("""
+				SELECT 
+					parent_item, item_code, 
+					SUM(qty) as qty 
+				FROM 
+					`tabPacked Item` 
+				WHERE 
+					parent = %s AND 
+					parent_item = %s 
+				GROUP BY 
+					item_code
+			""", (sales_order_name, sales_item.item_code), as_dict=True)
 
-			so_packed_items = frappe.db.get_all("Packed Item", {"parent": sales_order_name, "parent_item": sales_item.item_code}, ["*"])
-			dn_packed_items = frappe.db.get_all("Packed Item", {"parent": delivery_note_name, "parent_item": sales_item.item_code}, ["*"])
+			dn_packed_items = frappe.db.sql("""
+				SELECT 
+					parent_item, item_code, 
+					SUM(qty) as qty , excluded_item
+				FROM 
+					`tabPacked Item` 
+				WHERE 
+					parent = %s AND 
+					parent_item = %s 
+				GROUP BY 
+					item_code
+			""", (delivery_note_name, sales_item.item_code), as_dict=True)
+			#so_packed_items = frappe.db.get_all("Packed Item", {"parent": sales_order_name, "parent_item": sales_item.item_code}, ["*"])
+			#dn_packed_items = frappe.db.get_all("Packed Item", {"parent": delivery_note_name, "parent_item": sales_item.item_code}, ["*"])
 			toadd = True
 			for so_pi in so_packed_items:
 				for dn_pi in dn_packed_items:
@@ -583,7 +608,7 @@ def get_reminded_bundle_items(sales_order_name):
 			where so_item.parent = '{0}' and so_item.docstatus = 1
 			and so_item.delivered_qty < so_item.qty and so_item.delivered_by_supplier != 1
 			group by so_item.item_code
-			""".format(sales_order),
+			""".format(sales_order_name),
 		as_dict = 1)
 
 @frappe.whitelist()
