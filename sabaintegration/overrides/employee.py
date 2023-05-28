@@ -49,23 +49,25 @@ def share_todos(self):
 			toadd = True
 
 	if toadd:
-		from sabaintegration.overrides.todo import get_leaders
-		from frappe.share import add_docshare
-
-		leaders = get_leaders(self.todo_maintainer_)
-		if leaders : leaders.add(self.todo_maintainer_)
-		else: leaders = [self.todo_maintainer_]
+		_share_todos(self.user_id, self.todo_maintainer_)
 		
-		employess = get_employees(self.user_id)
-		if employess: employess.add(self.user_id)
-		else: employess = [self.user_id]
+def _share_todos(user_id, todo_maintainer_):
+	from sabaintegration.overrides.todo import get_leaders
+	from frappe.share import add_docshare
 
-		todos = frappe.db.get_all("ToDo", {"allocated_to": ("in", employess)})
-		for todo in todos:
-			for leader in leaders:
-				if not frappe.db.exists("ToDo", {"share_doctype": "ToDo", "share_name": todo.name, "user": leader}):
-					add_docshare("ToDo", todo.name, leader , flags={"ignore_share_permission": True})
+	leaders = get_leaders(todo_maintainer_)
+	if leaders : leaders.add(todo_maintainer_)
+	else: leaders = [todo_maintainer_]
 	
+	employess = get_employees(user_id)
+	if employess: employess.add(user_id)
+	else: employess = [user_id]
+
+	todos = frappe.db.get_all("ToDo", {"allocated_to": ("in", employess)})
+	for todo in todos:
+		for leader in leaders:
+			if not frappe.db.exists("ToDo", {"share_doctype": "ToDo", "share_name": todo.name, "user": leader}):
+				add_docshare("ToDo", todo.name, leader , flags={"ignore_share_permission": True})
 
 def get_employees(manager_id, employees_list = None):
 	"Get the employees below a given employee"
@@ -79,3 +81,10 @@ def get_employees(manager_id, employees_list = None):
 	else:
 		return
 	return set(employees_list)
+
+@frappe.whitelist()
+def share_todos_with_team():
+	employees = frappe.db.get_all("Employee", {"user_id": ("!=", ""), "todo_maintainer_": ("!=", "")}, ["name", "user_id", "todo_maintainer_"])
+	for emp in employees:
+		_share_todos(emp.user_id, emp.todo_maintainer_)
+	frappe.db.commit()
