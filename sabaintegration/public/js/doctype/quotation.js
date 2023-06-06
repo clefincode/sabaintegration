@@ -93,17 +93,30 @@ frappe.ui.form.on('Quotation', {
 		}
 
 	},
-	conversion_rate: function(frm) {
-		frm.events.set_rates_without_margin(frm);
+	conversion_rate: function(frm){
+		frm.events.set_rates_without_margin(frm)
+	},
+	currency: function(frm){
+		for (let i of frm.doc.items){
+			i.margin_type = '';
+		}
 	},
 	set_rates_without_margin(frm){
 		for (let i of frm.doc.items){
 			i.rate_without_profit_margin = i.base_rate_without_profit_margin / frm.doc.conversion_rate;
-			if (i.margin_rate_or_amount !== undefined && i.margin_rate_or_amount > 0)
+			i.rate = i.base_rate / frm.doc.conversion_rate;
+			if (i.margin_rate_or_amount !== undefined && i.margin_rate_or_amount > 0){
 				i.margin_rate_or_amount = (i.base_rate - i.base_price_list_rate) / frm.doc.conversion_rate;
-			let discount_amount = (i.base_price_list_rate - i.base_rate) / frm.doc.conversion_rate;
-			if (discount_amount > 0) i.discount_amount = discount_amount
-			else i.discount_amount = 0
+				i.discount_amount = 0;
+				i.discount_percentage = 0;
+			}
+			if (i.discount_amount > 0){
+				i.discount_amount = (i.base_price_list_rate - i.base_rate) / frm.doc.conversion_rate;
+				i.discount_percentage = 0;
+				i.margin_rate_or_amount = 0;
+			}
+			else i.discount_amount = 0;
+
 		}
 		cur_frm.refresh_field("items");
 	},
@@ -142,21 +155,11 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 		super.refresh(doc, dt, dn);
 		this.set_dynamic_labels();
 	}
-	async currency() {
-		this.set_margin_amount()
-		await super.currency();
-	}
 	customer() {
 		var me = this;
 		erpnext.utils.get_party_details(this.frm, null, null, function() {
 			me.apply_price_list();
 		});
-	}
-
-	set_margin_amount(conversion_rate){
-		for (let i of cur_frm.doc.items){
-			i.margin_type = '';
-		}
 	}
 
 	sales_partner() {
@@ -300,8 +303,18 @@ frappe.ui.form.on('Quotation Item', {
 		//frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
 		//frappe.model.set_value(cdt, cdn, "price_list_rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
 		d.rate = d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin)
-		d.margin_type = "Amount";
-		d.margin_rate_or_amount = d.rate - d.price_list_rate;
+		if (d.rate > d.price_list_rate ){
+			d.margin_type = "Amount";
+			d.margin_rate_or_amount = (d.rate - d.price_list_rate);
+			d.discount_amount = 0;
+			d.discount_percentage = '';
+		}
+		else if (d.rate < d.price_list_rate) {
+			d.discount_amount = d.price_list_rate - d.rate;
+			d.discount_percentage = d.discount_amount / d.price_list_rate * 100;
+			d.margin_type = '';
+			d.margin_rate_or_amount = 0;
+		}
 		sabaintegration.calculate_total_margin(frm);
 	},
 	rate: function(frm,cdt,cdn){
