@@ -254,6 +254,7 @@ def make_quotation(source_name, target_doc=None):
     def set_missing_values(source, target):
         from erpnext.controllers.accounts_controller import get_default_taxes_and_charges
         from erpnext import get_company_currency
+        from sabaintegration.overrides.quotation import get_costs
 
         target.quotation_to = frappe.db.get_value("Opportunity", opportunity, "opportunity_from")
         target.party_name = frappe.db.get_value("Opportunity", opportunity, "party_name")
@@ -268,6 +269,11 @@ def make_quotation(source_name, target_doc=None):
         )
         if taxes.get("taxes"):
             target.update(taxes)
+
+        target.update({
+            "costs_template": "Projects Indirect Cost Analysis",
+            "costs": get_costs("Projects Indirect Cost Analysis")
+        })
 
         target.flags.ignore_permissions = True
         set_party_details(source, target)
