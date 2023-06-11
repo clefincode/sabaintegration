@@ -283,13 +283,12 @@ class BundleDeliveryNote(Document):
 
 			item_details = frappe.db.get_all("Bundle Delivery Note Item", {"parent": self.name, "item_code": packed_item_bdn}, ['batch_no', 'serial_no', 'warehouse'])
 			if item_details:
-				batch, serial = frappe.db.get_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, ['batch_no', 'serial_no'])
+				batch, serial = frappe.db.get_value("Packed Item", {'name': packed_name}, ['batch_no', 'serial_no'])
 
-				if item_details[0]["batch_no"]: frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "batch_no", batch + item_details[0]["batch_no"])
+				if item_details[0]["batch_no"]: frappe.db.set_value("Packed Item", {'name': packed_name}, "batch_no", batch + item_details[0]["batch_no"])
 				if item_details[0]["serial_no"]: 
 					if serial: serial += '\n'
-					frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "serial_no", serial + item_details[0]["serial_no"])
-					
+					frappe.db.set_value("Packed Item", {'name': packed_name}, "serial_no", serial + item_details[0]["serial_no"])
 				
 				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "warehouse", item_details[0]["warehouse"])				
 
