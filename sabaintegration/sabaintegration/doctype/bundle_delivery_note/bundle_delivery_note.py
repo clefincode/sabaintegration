@@ -248,7 +248,7 @@ class BundleDeliveryNote(Document):
 				
 
 	def setting_packed_items_values(self, state):
-		packed_items = {}
+		packed_items, serials = {}, {}
 		for item in self.stock_entries:
 			packed_items[item.item_code] = packed_items.get(item.item_code, 0) + item.qty
 
@@ -283,14 +283,25 @@ class BundleDeliveryNote(Document):
 
 			item_details = frappe.db.get_all("Bundle Delivery Note Item", {"parent": self.name, "item_code": packed_item_bdn}, ['batch_no', 'serial_no', 'warehouse'])
 			if item_details:
-				batch, serial = frappe.db.get_value("Packed Item", {'name': packed_name}, ['batch_no', 'serial_no'])
+				batch, serial_no = frappe.db.get_value("Packed Item", {'name': packed_name}, ['batch_no', 'serial_no'])
 
 				if item_details[0]["batch_no"]: frappe.db.set_value("Packed Item", {'name': packed_name}, "batch_no", batch + item_details[0]["batch_no"])
 				if item_details[0]["serial_no"]: 
-					if serial: serial += '\n'
-					frappe.db.set_value("Packed Item", {'name': packed_name}, "serial_no", serial + item_details[0]["serial_no"])
+					if serial_no: serial_no += '\n'
+					s = item_details[0]["serial_no"].split()
+					added_serial = ''
+					for serial in s:
+						if not serials.get(packed_item_bdn) or serial not in serials[packed_item_bdn]:
+							added_serial = added_serial + serial + '\n'
+							if serials.get(packed_item_bdn):
+								serials[packed_item_bdn].append(serial)
+							else: serials[packed_item_bdn] = [serial]
+							if len(added_serial.split()) >= int(qty_state): break
+					
+					added_serial = serial_no + added_serial
+					frappe.db.set_value("Packed Item", {'name': packed_name}, "serial_no", added_serial)
 				
-				frappe.db.set_value("Packed Item", {'parent': self.delivery_note, 'parent_item': so_pi.parent_item, 'item_code': packed_item_bdn}, "warehouse", item_details[0]["warehouse"])				
+				frappe.db.set_value("Packed Item", {'name': packed_name}, "warehouse", item_details[0]["warehouse"])				
 
 			state_item = {
 				"parent_item": so_pi.parent_item,
