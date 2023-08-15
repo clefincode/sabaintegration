@@ -16,14 +16,13 @@ def share_todos(self):
 
 	###Remove sharing todos from previous todo maintainer
 	if self.get_doc_before_save() and self.get_doc_before_save().todo_maintainer_ and self.get_doc_before_save().todo_maintainer_ != self.todo_maintainer_:
-		from sabaintegration.overrides.todo import get_leaders
 
 		prev_maintainer = self.get_doc_before_save().todo_maintainer_
-		leaders = get_leaders(prev_maintainer)
+		leaders = get_leaders(prev_maintainer, "user_id", "todo_maintainer_")
 		if leaders : leaders.add(prev_maintainer)
 		else: leaders = [prev_maintainer]
 
-		employess = get_employees(self.user_id)
+		employess = get_employees(self.user_id, "user_id", "todo_maintainer_")
 		if employess: employess.add(self.user_id)
 		else: employess = [self.user_id]
 
@@ -52,14 +51,13 @@ def share_todos(self):
 		_share_todos(self.user_id, self.todo_maintainer_)
 		
 def _share_todos(user_id, todo_maintainer_):
-	from sabaintegration.overrides.todo import get_leaders
 	from frappe.share import add_docshare
 
-	leaders = get_leaders(todo_maintainer_)
+	leaders = get_leaders(todo_maintainer_, "user_id", "todo_maintainer_")
 	if leaders : leaders.add(todo_maintainer_)
 	else: leaders = [todo_maintainer_]
 	
-	employess = get_employees(user_id)
+	employess = get_employees(user_id, "user_id" ,"todo_maintainer_")
 	if employess: employess.add(user_id)
 	else: employess = [user_id]
 
@@ -69,18 +67,33 @@ def _share_todos(user_id, todo_maintainer_):
 			if not frappe.db.exists("ToDo", {"share_doctype": "ToDo", "share_name": todo.name, "user": leader}):
 				add_docshare("ToDo", todo.name, leader , flags={"ignore_share_permission": True})
 
-def get_employees(manager_id, employees_list = None):
+def get_employees(maintainer_id, maintainer_id_fieldname, maintainer_field, employees_list = None):
 	"Get the employees below a given employee"
 	if not employees_list:
 		employees_list = []
-	employees = frappe.db.get_all("Employee", {"todo_maintainer_": manager_id},  "user_id")
+
+	employees = frappe.db.get_all("Employee", {maintainer_field: maintainer_id},  maintainer_id_fieldname)
+
 	if employees:
 		for employee in employees:
-			employees_list.append(employee.user_id)
-			get_employees(employee.user_id, employees_list)
+			employees_list.append(employee.get(maintainer_id_fieldname))
+			get_employees(employee.get(maintainer_id_fieldname), maintainer_id_fieldname, maintainer_field, employees_list)
 	else:
 		return
 	return set(employees_list)
+
+def get_leaders(user, user_field, maintainer_field, employees = None, direct_leader = False):
+    if not employees:
+        employees = []
+    leader = frappe.db.get_value("Employee", {user_field: user} , maintainer_field)
+    if not leader:
+        return 
+    else:
+        if direct_leader: return leader
+        if not leader in employees:
+            employees.append(leader)
+        get_leaders(leader, user_field, maintainer_field, employees)
+    return employees
 
 @frappe.whitelist()
 def share_todos_with_team():

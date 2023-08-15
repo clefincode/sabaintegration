@@ -14,6 +14,16 @@ frappe.ui.form.on("Sales Order", {
 		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
 	},
+	refresh: function(frm){
+		// Show the Download button under the items child table in submitted documents
+		frm.fields_dict.items.grid.wrapper.find('.grid-upload').removeClass("hidden");
+		if(frm.doc.docstatus == 1){
+			setTimeout(() => {
+				frm.fields_dict.items.grid.wrapper.find('.grid-footer').css('display', 'block');
+				frm.fields_dict.items.grid.wrapper.find('.grid-upload').addClass("hidden");
+			}, 1000);
+		}		
+	}	
 
 });
 
@@ -69,6 +79,27 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 
 		// this.frm.toggle_display(["total_rate_without_margin", "total_items_markup_value",
 		// 	"expected_profit_loss_value"], this.frm.doc.price_list_currency != company_currency);
+		this.frm.set_currency_labels([
+			"base_cost_value"
+		], company_currency, "costs");
+
+		this.frm.set_currency_labels([
+			"rate_without_profit_margin"
+		], this.frm.doc.currency, "items");
+
+		this.frm.set_currency_labels([
+			"cost_value"
+		], this.frm.doc.currency, "costs");
+
+		this.frm.set_currency_labels([
+			"base_cosmmission_value", "base_net_commission_value"
+		], company_currency, "sales_commission");
+
+		this.frm.set_currency_labels([
+			"commission_value", "net_commission_value"
+		], this.frm.doc.currency, "sales_commission");
+
+
 	}
 	additional_discount_percentage() {
 		this.frm.cscript.calculate_taxes_and_totals();
@@ -192,6 +223,36 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 			});
 		}
 	}
+	primary_sales_man(){
+		var me = this;
+		frappe.call({
+			"method": "sabaintegration.overrides.sales_order.get_commission_percent",
+			"args": {"sales_man": this.frm.doc.primary_sales_man},
+			callback: function(r){
+				if (r.message){
+					this.frm.doc.commission_percentage = r.message;
+					this.frm.refresh_field("commission_percentage");
+				}
+			}
+		})
+	}
+	sales_commission_template(){
+		var me = this;
+		if(this.frm.doc.sales_commission_template) {
+			return this.frm.call({
+				method: "sabaintegration.overrides.sales_order.get_commission",
+				args: {
+					"commission_template": this.frm.doc.sales_commission_template
+				},
+				callback: function(r) {
+					if(!r.exc) {
+						me.frm.set_value("sales_commission", r.message);
+						
+					}
+				}
+			});
+		}
+	}
 
 }
 
@@ -247,54 +308,45 @@ frappe.ui.form.on('Cost', {
 	}
 })
 
-// frappe.ui.form.on('Sales Commission', {
-// 	sales_person: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		frappe.model.set_value(cdt, cdn, "comm_percent", 5);
-// 		get_default_rule(d);
-// 	},
-// 	profits_quota: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		if (d.achieve_percent !== undefined) {
-// 			d.achieve_value = d.profits_quota * d.achieve_percent / 100;
-// 			calculate_commission(d);
-// 		}
-// 	},
-// 	achieve_percent: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		if (d.profits_quota !== undefined) d.achieve_value = d.profits_quota * d.achieve_percent / 100;
-// 		cur_frm.refresh_field("sales_commission");
-// 		calculate_commission(d);
-// 	},
-// 	achieve_value: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		if (d.profit_quota !== undefined) d.achieve_percent = d.achieve_value / d.profits_quota * 100;
-// 		cur_frm.refresh_field("sales_commission");
-// 		calculate_commission(d);
-// 	},
-// 	rule: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		if (d.achieve_percent !== undefined) calculate_commission(d);
-// 	},
-// 	comm_percent: function(frm, cdt, cdn){
-// 		let d = locals[cdt][cdn];
-// 		if (d.achieve_percent !== undefined) calculate_commission(d);
-// 	},
-	
-// })
+frappe.ui.form.on('Sales Commission', {
+	sales_commission_add: function(frm , cdt, cdn){
+		let d = locals[cdt][cdn];
+		frappe.model.set_value(cdt, cdn, "sales_person", "Sales Team");
+	},
+	sales_person: function(frm, cdt, cdn){
+		let d = locals[cdt][cdn];
+		get_default_rule(d);
+	},
+	stage_title: function(frm, cdt, cdn){
+        let d = locals[cdt][cdn];
+        if (d.stage_title == "Lead (Prospecting)")
+            d.comm_percent = 5;
+        else if (d.stage_title == "Approaching (Initiating & Opening communication)")
+            d.comm_percent = 20;
+        else if (d.stage_title == "Technical Submittal")
+            d.comm_percent = 8;
+        else if (d.stage_title == "Financial Submittal")
+            d.comm_percent = 7;
+        else if (d.stage_title == "Following Up")
+            d.comm_percent = 30;
+        else if (d.stage_title == "Closing")
+            d.comm_percent = 30;
+		frm.refresh_field("sales_commission");
+    },	
+})
 
-// const get_default_rule = function(row){
-// 	frappe.call({
-// 		method: "sabaintegration.sabaintegration.doctype.commission_rule.commission_rule.get_default_rule",
-// 		callback: function(r){
-// 			if (r.message){
-// 				row.rule = r.message;
-// 				cur_frm.refresh_field("sales_commission");
-// 			}
-// 		}
+const get_default_rule = function(row){
+	frappe.call({
+		method: "sabaintegration.sabaintegration.doctype.commission_rule.commission_rule.get_default_rule",
+		callback: function(r){
+			if (r.message){
+				row.rule = r.message;
+				cur_frm.refresh_field("sales_commission");
+			}
+		}
 		
-// 	})	
-// }
+	})	
+}
 
 // const calculate_commission = function(row){
 	
@@ -311,8 +363,10 @@ frappe.ui.form.on('Cost', {
 // 			"args": args
 // 		},
 // 		callback: function(r){
+// 			console.log(r.message)
 // 			if (r.message){
 // 				row.commission_value = r.message;
+// 				row.net_commission_value = row.commission_value * row.kpi / 100;
 // 				cur_frm.refresh_field("sales_commission");
 // 			}
 // 		}
@@ -320,3 +374,4 @@ frappe.ui.form.on('Cost', {
 // 	})
 
 // }
+

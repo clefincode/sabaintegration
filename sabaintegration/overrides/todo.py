@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 import frappe
 
 from frappe.desk.doctype.todo.todo import ToDo
+from sabaintegration.overrides.employee import get_leaders
 exclude_from_linked_with = True
 
 class CustomToDo(ToDo):
@@ -12,19 +13,8 @@ class CustomToDo(ToDo):
         self.share_with_leaders() 
 
     def share_with_leaders(self):
-        employees = get_leaders(self.allocated_to)
+        employees = get_leaders(self.allocated_to, "user_id", "todo_maintainer_")
         if employees:
             from frappe.share import add_docshare
             for employee in employees:
                 add_docshare("ToDo", self.name, employee , flags={"ignore_share_permission": True})
-
-def get_leaders(user, employees = None):
-    if not employees:
-        employees = []
-    leader = frappe.db.get_value("Employee", {"user_id": user} ,"todo_maintainer_")
-    if not leader:
-        return 
-    else:
-        employees.append(leader)
-        get_leaders(leader, employees)
-    return set(employees)

@@ -1,0 +1,38 @@
+{
+ "chart_name": "Salesman Commission Progress",
+ "chart_type": "Report",
+ "creation": "2023-07-17 11:12:33.052720",
+ "custom_options": "",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "dynamic_filters_json": "{}",
+ "filters_json": "{\"year\":2023}",
+ "group_by_type": "Count",
+ "idx": 0,
+ "is_public": 0,
+ "is_standard": 1,
+ "modified": "2023-07-17 11:13:39.636023",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Salesman Commission Progress",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "report_name": "Salesman Commission Progress",
+ "roles": [],
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Bar",
+ "use_report_chart": 0,
+ "x_field": "sales_man",
+ "y_axis": [
+  {
+   "color": "#29CD42",
+   "y_field": "base_expected_profit_loss_value"
+  },
+  {
+   "color": "#449CF0",
+   "y_field": "quota"
+  }
+ ]
+}

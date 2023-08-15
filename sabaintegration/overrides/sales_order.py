@@ -1,5 +1,6 @@
 import json
 import frappe
+from datetime import datetime
 from six import string_types
 from frappe.utils import  cstr, flt, now
 from frappe.model.utils import get_fetch_values
@@ -15,6 +16,7 @@ class CustomSalesOrder(SalesOrder):
         super(CustomSalesOrder, self).validate()
         self.update_total_margin()
         self.update_costs()
+        self.validate_commission()
         if self.get("_action") and self._action == 'submit':
             self.submitting_date = now()
         if self.get("_action") and self._action != 'update_after_submit':
@@ -49,9 +51,9 @@ class CustomSalesOrder(SalesOrder):
         self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
         self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
 
-    # def on_submit(self):
-    #     super(CustomSalesOrder, self).on_submit()
-    #     self.create_project_automatically()
+    def on_submit(self):
+        super(CustomSalesOrder, self).on_submit()
+        self.create_project_automatically()
 
     def create_project_automatically(self):
         if self.project: return
@@ -59,6 +61,15 @@ class CustomSalesOrder(SalesOrder):
         project = make_project(self.name)
         project.insert(ignore_permissions = True)
         frappe.msgprint("A new project <a href='/app/project/{project}'><b>{project}</b></a> has been created".format(project = project.name))
+    
+    def validate_commission(self):
+        if not self.primary_sales_man and self.sales_commission:
+            frappe.throw("You Need to Set a Primary Sales Man for the Sales Order")
+        if not self.commission_percentage and self.primary_sales_man:
+            comm = get_commission_percent(self.primary_sales_man)
+            if not comm:
+                comm = 5
+            self.commission_percentage = comm
 
 @frappe.whitelist()
 def make_bdn(sales_order, parents_items):
@@ -196,11 +207,42 @@ def make_delivery_note(source_name, target_doc=None, skip_item_mapping=False):
     target_doc.set_onload("ignore_price_list", True)
 
     return target_doc
+
+@frappe.whitelist()
+def get_commission(commission_template):
+
+	from frappe.model import child_table_fields, default_fields
+
+	template = frappe.get_doc("Sales Commission Template", commission_template)
+
+	template_list = []
+	for i, comm in enumerate(template.get("sales_commission")):
+		comm = comm.as_dict()
+
+		for fieldname in default_fields + child_table_fields:
+			if fieldname in comm:
+				del comm[fieldname]
+
+		template_list.append(comm)
+
+	return template_list
+
+@frappe.whitelist()
+def get_commission_percent(sales_man):
+    if not sales_man: return
+    from datetime import datetime
+
+    # Get the current date
+    now_date = frappe.utils.nowdate()
+
+    # Convert it to a datetime object
+    today_date = datetime.strptime(now_date, '%Y-%m-%d')
+    month = today_date.month
+    year = today_date.year
+    quarter = (month - 1) // 3 + 1
     
-# @frappe.whitelist()
-# def calculate_commission_value(args):
-#     from sabaintegration.sabaintegration.doctype.commission_rule.commission_rule import calculate_commission
-#     args = json.loads(args)
-#     comm = calculate_commission(args["achieve_percent"], args["rule"])
-#     if comm:
-#         return comm / 100 * (args["comm_percent"] / 100 * args["achieve_value"])
+    if not quarter: return
+    
+    commission_percentage = frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "quarter": "Q"+ str(quarter), "year": year, "docstatus": 1}, "commission_percentage")
+
+    if commission_percentage: return commission_percentage

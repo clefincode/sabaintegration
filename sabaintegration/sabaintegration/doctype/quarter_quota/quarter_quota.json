@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2023-06-20 08:56:48.267716",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "general_information_section",
+  "naming_series",
+  "title",
+  "sales_man",
+  "position",
+  "column_break_5",
+  "year",
+  "quarter",
+  "default_values_section",
+  "commission_percentage",
+  "kpi",
+  "section_break_13",
+  "quota",
+  "column_break_15",
+  "total_quota",
+  "to_get_extra",
+  "achievement_percentage",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "sales_man",
+   "fieldtype": "Link",
+   "label": "Sales Man",
+   "options": "Sales Person"
+  },
+  {
+   "fieldname": "year",
+   "fieldtype": "Link",
+   "label": "Year",
+   "options": "Fiscal Year"
+  },
+  {
+   "fieldname": "quarter",
+   "fieldtype": "Select",
+   "label": "Quarter",
+   "options": "\nQ1\nQ2\nQ3\nQ4"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Quarter Quota",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "quota",
+   "fieldtype": "Currency",
+   "label": "Quota",
+   "options": "Company:company:default_currency"
+  },
+  {
+   "default": "100",
+   "fieldname": "kpi",
+   "fieldtype": "Percent",
+   "label": "KPI"
+  },
+  {
+   "fieldname": "commission_percentage",
+   "fieldtype": "Percent",
+   "label": "Commission Percentage",
+   "precision": "3"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Series",
+   "no_copy": 1,
+   "options": "QQ-SM-.YYYY.-",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "default": "{sales_man}",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Title",
+   "no_copy": 1,
+   "print_hide": 1,
+   "report_hide": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_quota",
+   "fieldtype": "Currency",
+   "label": "Total Quota",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "general_information_section",
+   "fieldtype": "Section Break",
+   "label": "General Information"
+  },
+  {
+   "fieldname": "column_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_values_section",
+   "fieldtype": "Section Break",
+   "label": "Default Values"
+  },
+  {
+   "fieldname": "section_break_13",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_15",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "position",
+   "fieldtype": "Select",
+   "label": "Level",
+   "options": "\nTrainee\nJunior\nMid-Level\nSenior\nTeam Leader\nManager\nDirector\nCEO",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "to_get_extra",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "To Get Extra"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "achievement_percentage",
+   "fieldtype": "Percent",
+   "hidden": 1,
+   "label": "Achievement Percentage"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2023-08-15 16:07:13.195371",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Quarter Quota",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "sales_man, year, quarter",
+ "show_name_in_global_search": 1,
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title"
+}

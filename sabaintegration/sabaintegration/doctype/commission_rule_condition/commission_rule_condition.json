@@ -1,0 +1,56 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2023-04-25 14:08:08.327110",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "milestone",
+  "condition",
+  "calculation",
+  "comm_percent"
+ ],
+ "fields": [
+  {
+   "fieldname": "milestone",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Milestone",
+   "precision": "2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "calculation",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Commission Calculation",
+   "options": "\nZero\nAs Milestone"
+  },
+  {
+   "fieldname": "condition",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Condition",
+   "options": "equals\nless than\nless than or equals\ngreater than\ngreater than or equals\nnot equals"
+  },
+  {
+   "fieldname": "comm_percent",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Commision Precentage"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2023-07-12 12:40:54.054913",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Commission Rule Condition",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
