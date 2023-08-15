@@ -19,7 +19,9 @@ class CustomQuotation(Quotation):
 
 		elemtoadd = abs(len(unsubmittedSQs) - len(submittedSQs))
 		
-		unsubmittedSQs = list(set(get_unsubmitted_sq(self)))
+		unsubmittedSQs = get_unsubmitted_sq(self)
+		if not unsubmittedSQs: return
+		unsubmittedSQs = list(set(unsubmittedSQs))
 
 		if elemtoadd:
 			if len(submittedSQs) > len(unsubmittedSQs):

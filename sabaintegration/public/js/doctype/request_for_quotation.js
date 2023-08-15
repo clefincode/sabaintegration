@@ -44,7 +44,7 @@ frappe.ui.form.on("Request for Quotation",{
 			}				
 			
 		});
-	}		
+	}	 
 	},
 
     make_supplier_quotation_opp: function(frm) {
@@ -230,7 +230,7 @@ frappe.ui.form.on("Request for Quotation Item", {
 	items_remove(frm, cdt, cdn) { 
 		var child = locals[cdt][cdn];
 		update_product_bundle(frm, child, "remove");
-	},	
+	}, 
 		
 });
 
