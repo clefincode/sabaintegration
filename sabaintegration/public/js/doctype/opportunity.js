@@ -35,6 +35,12 @@ frappe.ui.form.on("Opportunity", {
             if (frm.doc[option + 'status'] == "1" ){
                 frm.set_df_property(frm.all_options[i], "read_only", 1);
                 frm.set_df_property(option + '_submit', 'hidden', 1);
+                // show download button for every option
+                setTimeout(() => {
+                    frm.get_field(frm.all_options[i]).grid.wrapper.find('.grid-footer').css('display', 'block');
+				    frm.get_field(frm.all_options[i]).grid.wrapper.find('.grid-upload').addClass("hidden");
+                }, 500);
+                
                 // for cancel button showing for specific role users
                 if (frappe.user_roles.includes('0 CRM – Opportunity Option Cancellation')) {
                     frm.set_df_property(option + '_cancel', 'hidden', 0);
