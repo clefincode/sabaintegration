@@ -26,6 +26,7 @@ class CustomSalesOrder(SalesOrder):
     def update_total_margin(self):
         self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
         for item in self.items:
+            item.base_rate_without_profit_margin = item.rate_without_profit_margin * self.conversion_rate
             self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
             self.total += flt(item.amount, item.precision("amount"))
         self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
@@ -246,3 +247,12 @@ def get_commission_percent(sales_man):
     commission_percentage = frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "quarter": "Q"+ str(quarter), "year": year, "docstatus": 1}, "commission_percentage")
 
     if commission_percentage: return commission_percentage
+
+@frappe.whitelist()
+def get_sales_person(doctype, txt, searchfield, start, page_len, filters):
+    return frappe.db.sql(
+        f"""SELECT name , employee
+            FROM `tabSales Person` 
+            WHERE enabled = 1 AND (name like '%{txt}%' or employee like '%{txt}%')
+            order by name
+            """)

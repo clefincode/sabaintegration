@@ -10,6 +10,18 @@ frappe.ui.form.on("Sales Order", {
 	setup: function(frm) {
 		frm.custom_make_buttons['Bundle Delivery Note'] = 'Bundle Delivery Note'
 	},
+	onload: function(frm){
+		frm.set_query("primary_sales_man", function() {
+			return {
+				query: "sabaintegration.overrides.sales_order.get_sales_person",
+			};
+		});
+		frm.set_query("sales_person", "sales_commission", function() {
+			return {
+				query: "sabaintegration.overrides.sales_order.get_sales_person",
+			};
+		});
+	},
 	items_on_form_rendered: function(){
 		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
@@ -22,8 +34,48 @@ frappe.ui.form.on("Sales Order", {
 				frm.fields_dict.items.grid.wrapper.find('.grid-footer').css('display', 'block');
 				frm.fields_dict.items.grid.wrapper.find('.grid-upload').addClass("hidden");
 			}, 1000);
-		}		
-	}	
+		}	
+		frm.events.set_base_rates();	
+	},
+	conversion_rate: function(frm){
+		frm.events.set_rates_without_margin(frm)
+	},
+	currency: function(frm){
+		for (let i of frm.doc.items){
+			i.margin_type = '';
+		}
+	},
+	set_rates_without_margin(frm){
+		for (let i of frm.doc.items){
+			i.rate_without_profit_margin = i.base_rate_without_profit_margin / frm.doc.conversion_rate;
+			i.rate = i.base_rate / frm.doc.conversion_rate;
+			if (i.rate_without_profit_margin == 0) i.to_set_rate = 0;
+			if (i.margin_rate_or_amount !== undefined && i.margin_rate_or_amount > 0){
+				i.margin_rate_or_amount = (i.base_rate - i.base_price_list_rate) / frm.doc.conversion_rate;
+				i.discount_amount = 0;
+				i.discount_percentage = 0;
+			}
+			if (i.discount_amount > 0){
+				i.discount_amount = (i.base_price_list_rate - i.base_rate) / frm.doc.conversion_rate;
+				i.discount_percentage = 0;
+				i.margin_rate_or_amount = 0;
+			}
+			else i.discount_amount = 0;
+
+		}
+		cur_frm.refresh_field("items");
+	},
+
+	set_base_rates: function(){
+		let conversion_rate = cur_frm.doc.conversion_rate;
+		for (let i of cur_frm.doc.items){
+			if (i.base_rate_without_profit_margin == undefined || 
+				i.base_rate_without_profit_margin == 'undefined' ||
+				i.base_rate_without_profit_margin == 0){
+					i.base_rate_without_profit_margin = i.rate_without_profit_margin * conversion_rate;
+			}	
+		}
+	},
 
 });
 
@@ -227,11 +279,11 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 		var me = this;
 		frappe.call({
 			"method": "sabaintegration.overrides.sales_order.get_commission_percent",
-			"args": {"sales_man": this.frm.doc.primary_sales_man},
+			"args": {"sales_man": me.frm.doc.primary_sales_man},
 			callback: function(r){
 				if (r.message){
-					this.frm.doc.commission_percentage = r.message;
-					this.frm.refresh_field("commission_percentage");
+					me.frm.doc.commission_percentage = r.message;
+					me.frm.refresh_field("commission_percentage");
 				}
 			}
 		})
@@ -259,24 +311,72 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 extend_cscript(cur_frm.cscript, new erpnext.selling.CustomSalesOrderController({frm: cur_frm}));
 
 frappe.ui.form.on('Sales Order Item', {
+	item_code: function(frm,cdt,cdn){
+		var d = locals[cdt][cdn];
+		if (!(d.from_buying_price_list == '' || 
+		d.from_buying_price_list == undefined || 
+		d.from_buying_price_list == 'undifined'))
+			set_buying_rate(frm, d)
+
+	},
 	items_remove: function(frm){
 		sabaintegration.set_total_without_margin(frm);
 		sabaintegration.calculate_total_margin(frm);
 	},
 	margin_from_supplier_quotation: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
-		frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+		//frappe.model.set_value(cdt, cdn, "rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
 		//frappe.model.set_value(cdt, cdn, "price_list_rate", d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin))
+		d.rate = d.rate_without_profit_margin + (d.margin_from_supplier_quotation / 100 * d.rate_without_profit_margin)
+		if (d.rate > d.price_list_rate ){
+			d.margin_type = "Amount";
+			d.margin_rate_or_amount = (d.rate - d.price_list_rate);
+			d.discount_amount = 0;
+			d.discount_percentage = '';
+		}
+		else if (d.rate < d.price_list_rate) {
+			d.discount_amount = d.price_list_rate - d.rate;
+			d.discount_percentage = d.discount_amount / d.price_list_rate * 100;
+			d.margin_type = '';
+			d.margin_rate_or_amount = 0;
+		}
 		sabaintegration.calculate_total_margin(frm);
+	},
+	price_list_rate: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		if (!d.rate_without_profit_margin && d.to_set_rate == 1){
+			if (d.from_buying_price_list == '' || 
+			d.from_buying_price_list == undefined || 
+			d.from_buying_price_list == 'undifined'){
+				d.rate_without_profit_margin = d.price_list_rate
+				d.base_rate_without_profit_margin = d.base_price_list_rate;
+			}
+			else {
+				set_buying_rate(frm, d)
+			}
+		}
+		d.to_set_rate = 1;
 	},
 	rate: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
-		if (!d.rate_without_profit_margin || d.rate_without_profit_margin == undefined || d.rate_without_profit_margin == 'undefined'){
-			d.rate_without_profit_margin = d.price_list_rate
-		}
-		d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
+		if (d.rate_without_profit_margin)
+			d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
+		else
+			d.margin_from_supplier_quotation = 0
 		sabaintegration.set_total_without_margin(frm);
 		sabaintegration.calculate_total_margin(frm);
+	},
+	from_buying_price_list: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		if (d.from_buying_price_list == '' || 
+			d.from_buying_price_list == undefined || 
+			d.from_buying_price_list == 'undifined')
+			d.rate_without_profit_margin = d.price_list_rate
+		else {
+			set_buying_rate(frm, d)
+		}
+		d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
+		frm.refresh_field("items");
 	},
 	qty: function(frm, cdt, cdn){
 		sabaintegration.set_total_without_margin(frm);
@@ -285,7 +385,7 @@ frappe.ui.form.on('Sales Order Item', {
 	rate_without_profit_margin: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		var margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
-		frappe.model.set_value(cdt, cdn, "margin_from_supplier_quotation", margin_from_supplier_quotation)
+		d.margin_from_supplier_quotation = margin_from_supplier_quotation;
 		sabaintegration.set_total_without_margin(frm);
 		sabaintegration.calculate_total_margin(frm);
 	}
@@ -375,3 +475,25 @@ const get_default_rule = function(row){
 
 // }
 
+const set_buying_rate = function(frm, d){
+	/// use get_item_price
+	frappe.call({
+		method: "sabaintegration.stock.get_item_details._get_item_price",
+		args: {
+			item_code: d.item_code,
+			price_list: d.from_buying_price_list,
+			transaction_date: frm.doc.transaction_date,
+			batch_no: d.batch_no
+		},
+		callback: function(r){
+			if (r.message && r.message[0]){
+				let conversion_rate = 1;
+				if (frm.doc.conversion_rate) conversion_rate = frm.doc.conversion_rate
+				d.base_rate_without_profit_margin = r.message[0][1];
+				d.rate_without_profit_margin = r.message[0][1] / conversion_rate;
+				d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
+				frm.refresh_fields("items")
+			}
+		}
+	})
+}

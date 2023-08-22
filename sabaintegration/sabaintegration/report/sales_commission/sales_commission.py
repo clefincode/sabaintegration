@@ -308,7 +308,7 @@ def get_commissions(filters):
 		sales_men_comm[sales_man]['kpi'] = quarter_quota.kpi
 		sales_men_comm[sales_man]['achieve_percent'] = achievemnt_percent
 		sales_men_comm[sales_man]['quota'] = quarter_quota.total_quota
-		sales_men_comm[sales_man]['achieve_value'] = achievement_values[sales_man]
+		sales_men_comm[sales_man]['achieve_value'] = achievement_values.get(sales_man, 0)
 		sales_men_comm[sales_man]['total_achieve_value'] = total_achievement_values[sales_man]
 		sales_men_comm[sales_man]['achieved_target'] = comm
 		sales_men_comm[sales_man]['leaders'] = leaders.get(sales_man, [])
@@ -523,7 +523,10 @@ def get_permitted_rows(sales_men_comm):
 		
 		if not sales_person: return
 
-		dict_sm = {sales_person : sales_men_comm[sales_person]}
+		dict_sm = {}
+		
+		if sales_men_comm.get(sales_person):
+			dict_sm = {sales_person : sales_men_comm[sales_person]}
 		employees = get_employees(employee, "name", "reports_to")
 		if not employees: return dict_sm
 		for emp in employees:
