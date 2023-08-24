@@ -270,7 +270,7 @@ def get_commissions(filters):
 	commission_value: the commission he should get from his direct SOs
 	other_commission: the commission he should get from other SOs he contributed in
 	extra_commission: the extra commission percentage
-	supervision_commission: how much he will take as an extra commission from his subordinates SOs
+	primary_supervision_commission & secondary_supervision_commission: how much he will take as an extra commission from his subordinates SOs
 
 	"""
 	

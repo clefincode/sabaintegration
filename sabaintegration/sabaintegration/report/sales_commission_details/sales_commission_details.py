@@ -9,12 +9,12 @@ from sabaintegration.overrides.employee import get_employees
 from sabaintegration.sabaintegration.doctype.quarter_quota.quarter_quota import get_employee, check_if_team_leader
 
 def execute(filters=None):
-	columns = get_columns()
 	data = get_data(filters)
+	columns = get_columns(data)
 	return columns, data
 
-def get_columns():
-	return [
+def get_columns(data):
+	columns = [
 		{
 			"label": _("Sales Order"),
 			"fieldname": "sales_order",
@@ -115,47 +115,60 @@ def get_columns():
 			"width": 120,
 			"options": "Company:company:default_currency"
 		},
-		{
-			"label": _("Default Primary Supervision Achievement Value"),
-			"fieldname": "default_primary_supervision",
-			"fieldtype": "Currency",
-			"width": 120,
-			"options": "Company:company:default_currency"
-		},
-		{
-			"label": _("Primary Supervision Achievement"),
-			"fieldname": "default_primary_achievement",
-			"fieldtype": "Percent",
-			"width": 100,
-		},
-		{
-			"label": _("Primary Supervision Commission Value"),
-			"fieldname": "primary_supervision_commission",
-			"fieldtype": "Currency",
-			"width": 120,
-			"options": "Company:company:default_currency"
-		},
-		{
-			"label": _("Default Secondary Supervision Achievement Value"),
-			"fieldname": "default_secondary_supervision",
-			"fieldtype": "Currency",
-			"width": 120,
-			"options": "Company:company:default_currency"
-		},
-		{
-			"label": _("Secondary Supervision Achievement"),
-			"fieldname": "default_secondary_achievement",
-			"fieldtype": "Percent",
-			"width": 100,
-		},
-		{
-			"label": _("Primary Supervision Commission Value"),
-			"fieldname": "secondary_supervision_commission",
-			"fieldtype": "Currency",
-			"width": 120,
-			"options": "Company:company:default_currency"
-		},
 	]
+	primary, secondary = False, False 
+	for d in data:
+		if d.default_primary_supervision and not primary:
+			columns.extend([
+				{
+					"label": _("Default Primary Supervision Achievement Value"),
+					"fieldname": "default_primary_supervision",
+					"fieldtype": "Currency",
+					"width": 120,
+					"options": "Company:company:default_currency"
+				},
+				{
+					"label": _("Primary Supervision Achievement"),
+					"fieldname": "default_primary_achievement",
+					"fieldtype": "Percent",
+					"width": 100,
+				},
+				{
+					"label": _("Primary Supervision Commission Value"),
+					"fieldname": "primary_supervision_commission",
+					"fieldtype": "Currency",
+					"width": 120,
+					"options": "Company:company:default_currency"
+				}]
+			)
+			primary = True
+		if d.default_secondary_supervision and not secondary:
+			columns.extend(
+				[{
+					"label": _("Default Secondary Supervision Achievement Value"),
+					"fieldname": "default_secondary_supervision",
+					"fieldtype": "Currency",
+					"width": 120,
+					"options": "Company:company:default_currency"
+				},
+				{
+					"label": _("Secondary Supervision Achievement"),
+					"fieldname": "default_secondary_achievement",
+					"fieldtype": "Percent",
+					"width": 100,
+				},
+				{
+					"label": _("Secondary Supervision Commission Value"),
+					"fieldname": "secondary_supervision_commission",
+					"fieldtype": "Currency",
+					"width": 120,
+					"options": "Company:company:default_currency"
+				}]
+			)
+			secondary = True
+		if primary and secondary: break
+	return columns
+
 def get_conditions(filters):
 	conditions = ""
 	if filters.get("primary_sales_man"):
@@ -262,13 +275,19 @@ def get_data(filters):
 
 	_, _, leaders = get_achievement_values(res)
 
+	employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+		
+	if not employee: return
+
+	sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
+
 	for row in res:	
 		if sales_men_comm.get(row.primary_sales_man):
 			row['achieve_percent'] = sales_men_comm.get(row.primary_sales_man)
 		else: row['achieve_percent'] = get_achieve_percent(row.primary_sales_man, filters)
 		sales_men_comm[row.primary_sales_man] = row['achieve_percent']
 
-		get_leaders_supervision_values(row, leaders, filters)
+		get_leaders_supervision_values(row, leaders, filters, sales_person)
 
 	return res
 
@@ -279,7 +298,7 @@ def get_achieve_percent(sales_man, filters):
 
 	return frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "year": filters.get("year"), "quarter": filters.get("quarter")}, "achievement_percentage")
 
-def get_leaders_supervision_values(row, leaders, filters):		
+def get_leaders_supervision_values(row, leaders, filters, sales_person):		
 	secondary = True
 	
 	if leaders.get(row.primary_sales_man):
@@ -319,10 +338,15 @@ def get_leaders_supervision_values(row, leaders, filters):
 		row['team_primary_supervisior'] = row.primary_sales_man
 		row['team_secondary_supervisior'] = row.primary_sales_man
 
-	
-	get_leader_supervision_values(row, filters, "primary")
+	if frappe.session.user == "Administrator" or\
+	 "0 Accounting - Sales Persons Commission Report" in frappe.get_roles() or\
+	 row['team_primary_supervisior'] == sales_person:	
+		get_leader_supervision_values(row, filters, "primary")
 	if secondary:
-		get_leader_supervision_values(row, filters, "secondary")
+		if frappe.session.user == "Administrator" or\
+	 	"0 Accounting - Sales Persons Commission Report" in frappe.get_roles() or\
+	 	row['team_secondary_supervisior'] == sales_person:		
+			get_leader_supervision_values(row, filters, "secondary")
 
 def get_leader_supervision_values(row, filters, level):
 	leader = row['team_'+level+'_supervisior']
