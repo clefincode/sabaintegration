@@ -319,7 +319,11 @@ def get_commissions(filters):
 		# Calculate commissions from all sales order of the quarter
 		for so in sales_orders:
 			calculate_commission_in_so(so.sales_order, sales_men_comm, comm, list_filters)
-		sales_men_comm[sales_man]['avg_comm_percent'] = sales_men_comm[sales_man].get('avg_comm_percent') / len(sales_orders)
+
+		if len(sales_orders):
+			sales_men_comm[sales_man]['avg_comm_percent'] = sales_men_comm[sales_man].get('avg_comm_percent',0) / len(sales_orders)
+		else:
+			sales_men_comm[sales_man]['avg_comm_percent'] = quarter_quota.commission_percentage
 		#sales_men_comm[sales_man]['default_achieving_percent'] = total_achievement_values[sales_man] * sales_men_comm[sales_man]['avg_comm_percent'] / 100
 		#sales_men_comm[sales_man]['total_achieve_value'] = total_achievement_values[sales_man]
 
