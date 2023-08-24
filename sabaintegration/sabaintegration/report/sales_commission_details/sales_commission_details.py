@@ -117,6 +117,7 @@ def get_columns(data):
 		},
 	]
 	primary, secondary = False, False 
+	if not data: return
 	for d in data:
 		if d.default_primary_supervision and not primary:
 			columns.extend([
@@ -275,11 +276,17 @@ def get_data(filters):
 
 	_, _, leaders = get_achievement_values(res)
 
-	employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
-		
-	if not employee: return
+	sales_person, get_supervision = None, False
+	if frappe.session.user == "Administrator" or\
+	 "0 Accounting - Sales Persons Commission Report" in frappe.get_roles():
+		get_supervision = True
+	
+	else:
+		employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+			
+		if not employee: return
 
-	sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
+		sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
 
 	for row in res:	
 		if sales_men_comm.get(row.primary_sales_man):
@@ -287,7 +294,7 @@ def get_data(filters):
 		else: row['achieve_percent'] = get_achieve_percent(row.primary_sales_man, filters)
 		sales_men_comm[row.primary_sales_man] = row['achieve_percent']
 
-		get_leaders_supervision_values(row, leaders, filters, sales_person)
+		get_leaders_supervision_values(row, leaders, filters, sales_person, get_supervision)
 
 	return res
 
@@ -298,7 +305,7 @@ def get_achieve_percent(sales_man, filters):
 
 	return frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "year": filters.get("year"), "quarter": filters.get("quarter")}, "achievement_percentage")
 
-def get_leaders_supervision_values(row, leaders, filters, sales_person):		
+def get_leaders_supervision_values(row, leaders, filters, sales_person, get_supervision):		
 	secondary = True
 	
 	if leaders.get(row.primary_sales_man):
@@ -338,14 +345,10 @@ def get_leaders_supervision_values(row, leaders, filters, sales_person):
 		row['team_primary_supervisior'] = row.primary_sales_man
 		row['team_secondary_supervisior'] = row.primary_sales_man
 
-	if frappe.session.user == "Administrator" or\
-	 "0 Accounting - Sales Persons Commission Report" in frappe.get_roles() or\
-	 row['team_primary_supervisior'] == sales_person:	
+	if get_supervision or row['team_primary_supervisior'] == sales_person:	
 		get_leader_supervision_values(row, filters, "primary")
 	if secondary:
-		if frappe.session.user == "Administrator" or\
-	 	"0 Accounting - Sales Persons Commission Report" in frappe.get_roles() or\
-	 	row['team_secondary_supervisior'] == sales_person:		
+		if get_supervision or row['team_secondary_supervisior'] == sales_person:		
 			get_leader_supervision_values(row, filters, "secondary")
 
 def get_leader_supervision_values(row, filters, level):
