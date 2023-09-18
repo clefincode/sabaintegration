@@ -48,10 +48,10 @@ frappe.ui.form.on('Quotation', {
 			frm.toggle_display('option_number_from_opportunity', true)
 		}
 	},
-	items_on_form_rendered: function(){
-		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
-			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
-	},
+	// items_on_form_rendered: function(){
+	// 	if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
+	// 		cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
+	// },
 	refresh: function(frm){
 		if(frm.$wrapper.find(`.form-documents [data-doctype="Opportunity"]`).length == 0 && frm.doc.opportunity ){
             frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
@@ -132,6 +132,32 @@ frappe.ui.form.on('Quotation', {
 			}	
 		}
 	},
+	contracting_tax_calculations: async function(){
+		if(cur_frm.doc.contracting_tax_calculations == 1){
+			await cur_frm.add_child("costs" , {
+				cost_type: "Material Cost's VAT",
+				cost_percentage : 14,
+				cost_value : cur_frm.doc.total_rate_without_margin * 14 / 100
+			});
+			sabaintegration.update_costs()			
+		}else{
+			for(let row of cur_frm.fields_dict["costs"].grid.grid_rows){
+				if(row.doc.cost_type == "Material Cost's VAT"){
+					row.remove();
+					sabaintegration.update_costs()
+				}
+			}
+		}
+		cur_frm.get_field("costs").grid.refresh();
+		
+	},
+	taxes_and_charges: function(){
+		if(cur_frm.doc.taxes_and_charges == "Contracting Tax - S"){
+			cur_frm.set_value("contracting_tax_calculations" , 1);
+		}else{
+			cur_frm.set_value("contracting_tax_calculations" , 0);
+		}
+	},
 
 });
 
@@ -152,6 +178,27 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 			frm.cscript.calculate_taxes_and_totals();
 		});
 	}
+	onload(){
+        if (!this.frm.is_new()) {
+            if (this.frm.doc.from_buying_price_list == 1) {
+                this.frm.toggle_reqd("buying_price_list", 1)
+				this.frm.set_df_property("buying_price_list", "hidden", 0);
+            }
+            else {
+				this.frm.doc.buying_price_list = ''
+				this.frm.toggle_reqd("buying_price_list", 0)
+				this.frm.set_df_property("buying_price_list", "hidden", 1);
+            }
+        }
+		else {
+			this.frm.doc.from_buying_price_list = 1
+			this.frm.toggle_reqd("buying_price_list", 1)
+			for (let d of this.frm.doc.items){
+				d.from_buying_price_list = this.frm.doc.buying_price_list;
+				this.frm.refresh_field("items");
+			}
+		}
+    }
 	refresh(doc, dt, dn) {
 		super.refresh(doc, dt, dn);
 		this.set_dynamic_labels();
@@ -162,7 +209,30 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 			me.apply_price_list();
 		});
 	}
-
+	from_buying_price_list(){
+        if (!this.frm.doc.from_buying_price_list) {
+            this.frm.doc.buying_price_list = '';
+            this.frm.doc.selling_price_list = 'Standard Selling';
+            this.frm.refresh_field("selling_price_list");
+            this.frm.set_df_property("buying_price_list", "hidden", 1);
+            this.frm.set_df_property("selling_price_list", "hidden", 0);
+			this.frm.toggle_reqd("selling_price_list", 1)
+			this.frm.toggle_reqd("buying_price_list", 0)
+        }
+        else {
+           // this.frm.doc.selling_price_list = '';
+            this.frm.doc.buying_price_list = 'Standard Buying';
+            this.frm.refresh_field("buying_price_list");
+            this.frm.set_df_property("buying_price_list", "hidden", 0);
+			this.frm.toggle_reqd("buying_price_list", 1)
+		}
+		this.set_buying_price_list(this.frm)
+    }
+	set_buying_price_list(frm) {
+		for (let d of frm.doc.items){
+			frappe.model.set_value(d.doctype, d.name, 'from_buying_price_list', frm.doc.buying_price_list)
+		}
+	}
 	sales_partner() {
 		this.apply_pricing_rule();
 	}
@@ -287,6 +357,12 @@ extend_cscript(cur_frm.cscript, new erpnext.selling.CustomQuotationController({f
 
 ////
 frappe.ui.form.on('Quotation Item', {
+	items_add: function(frm, cdt, cdn){
+		var d = locals[cdt][cdn];
+		if (frm.doc.from_buying_price_list == 1)
+			d.from_buying_price_list = frm.doc.buying_price_list;
+
+	},
 	item_code: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
 		if (!(d.from_buying_price_list == '' || 
@@ -380,12 +456,20 @@ frappe.ui.form.on('Cost', {
 	cost_value: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		if (d.cost_value == 0) frappe.model.set_value(cdt, cdn, "cost_percentage", 0)
-		d.cost_percentage = d.cost_value / frm.doc.net_total * 100;
+		if(d.cost_type == "Material Cost's VAT"){
+			d.cost_percentage = d.cost_value / frm.doc.total_rate_without_margin * 100;
+		}else{
+			d.cost_percentage = d.cost_value / frm.doc.net_total * 100;
+		}		
 		sabaintegration.update_costs()
 	},
 	cost_percentage: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
-		d.cost_value = frm.doc.net_total * d.cost_percentage / 100;
+		if(d.cost_type == "Material Cost's VAT"){
+			d.cost_value = frm.doc.total_rate_without_margin * d.cost_percentage / 100;
+		}else{
+			d.cost_value = frm.doc.net_total * d.cost_percentage / 100;
+		}
 		d.base_cost_value = d.cost_value * frm.doc.conversion_rate;
 		sabaintegration.update_costs()
 	},
@@ -509,14 +593,19 @@ const set_buying_rate = function(frm, d){
 			batch_no: d.batch_no
 		},
 		callback: function(r){
+			console.log(r.message)
 			if (r.message && r.message[0]){
 				let conversion_rate = 1;
 				if (frm.doc.conversion_rate) conversion_rate = frm.doc.conversion_rate
 				d.base_rate_without_profit_margin = r.message[0][1];
 				d.rate_without_profit_margin = r.message[0][1] / conversion_rate;
-				d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
-				frm.refresh_fields("items")
 			}
+			else {
+				d.base_rate_without_profit_margin = d.base_price_list_rate;
+				d.rate_without_profit_margin = d.price_list_rate;
+			}
+			d.margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100;
+			frm.refresh_fields("items")
 		}
 	})
 }
