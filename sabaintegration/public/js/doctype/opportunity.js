@@ -124,10 +124,12 @@ frappe.ui.form.on("Opportunity", {
         var doc = frm.doc;
         if(!frm.is_new() && doc.status!=="Lost") {
             if(doc.items){
-                frm.add_custom_button(__('Update Option Items'),
-                    function() {
-                        frm.trigger("update_option_items")
-                    });
+                if (frappe.user_roles.includes("0 CRM – Opportunity Update Option Items")){
+                    frm.add_custom_button(__('Update Option Items'),
+                        function() {
+                            frm.trigger("update_option_items")
+                        });
+                }
                 var rfq = document.querySelectorAll('[data-label="Request%20For%20Quotation"]');
                 rfq[0].style.display = "none";
                 frm.add_custom_button(__('Custom Request For Quotation'),
