@@ -121,7 +121,10 @@ class CustomQuotation(Quotation):
 		total_costs = 0.00
 		if self.get("costs"): 
 			for row in self.costs:
-				row.cost_value = self.net_total * row.cost_percentage / 100
+				if row.cost_type == "Material Cost's VAT":
+					row.cost_value = self.total_rate_without_margin * row.cost_percentage / 100
+				else:
+					row.cost_value = self.net_total * row.cost_percentage / 100
 				total_costs += row.cost_value
 		self.total_costs = total_costs
 		self.base_total_costs = self.total_costs * self.conversion_rate

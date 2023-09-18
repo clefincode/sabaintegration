@@ -76,6 +76,33 @@ frappe.ui.form.on("Sales Order", {
 			}	
 		}
 	},
+	contracting_tax_calculations: async function(){
+		if(cur_frm.doc.contracting_tax_calculations == 1){
+			await cur_frm.add_child("costs" , {
+				cost_type: "Material Cost's VAT",
+				cost_percentage : 14,
+				cost_value : cur_frm.doc.total_rate_without_margin * 14 / 100
+			});	
+			sabaintegration.update_costs()	
+		}else{
+			for(let row of cur_frm.fields_dict["costs"].grid.grid_rows){
+				if(row.doc.cost_type == "Material Cost's VAT"){
+					row.remove();
+					sabaintegration.update_costs()
+				}
+			}
+		}
+		
+		cur_frm.get_field("costs").grid.refresh();
+		
+	},
+	taxes_and_charges: function(){
+		if(cur_frm.doc.taxes_and_charges == "Contracting Tax - S"){
+			cur_frm.set_value("contracting_tax_calculations" , 1);
+		}else{
+			cur_frm.set_value("contracting_tax_calculations" , 0);
+		}
+	},
 
 });
 
@@ -394,12 +421,20 @@ frappe.ui.form.on('Cost', {
 	cost_value: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		if (d.cost_value == 0) frappe.model.set_value(cdt, cdn, "cost_percentage", 0)
-		d.cost_percentage = d.cost_value / frm.doc.net_total * 100;
+		if(d.cost_type == "Material Cost's VAT"){
+			d.cost_percentage = d.cost_value / frm.doc.total_rate_without_margin * 100;
+		}else{
+			d.cost_percentage = d.cost_value / frm.doc.net_total * 100;
+		}
 		sabaintegration.update_costs()
 	},
 	cost_percentage: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
-		d.cost_value = frm.doc.net_total * d.cost_percentage / 100;
+		if(d.cost_type == "Material Cost's VAT"){
+			d.cost_value = frm.doc.total_rate_without_margin * d.cost_percentage / 100;
+		}else{
+			d.cost_value = frm.doc.net_total * d.cost_percentage / 100;
+		}		
 		d.base_cost_value = d.cost_value * frm.doc.conversion_rate;
 		sabaintegration.update_costs()
 	},

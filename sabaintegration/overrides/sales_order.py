@@ -17,11 +17,16 @@ class CustomSalesOrder(SalesOrder):
         self.update_total_margin()
         self.update_costs()
         self.validate_commission()
+        self.validate_sales_commission()
         if self.get("_action") and self._action == 'submit':
             self.submitting_date = now()
         if self.get("_action") and self._action != 'update_after_submit':
             if not self.tc_name:
                 frappe.throw("Terms is a mandatory field")
+    
+    def before_update_after_submit(self):
+        super(CustomSalesOrder, self).before_update_after_submit()
+        self.validate_sales_commission()
 
     def update_total_margin(self):
         self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
@@ -40,7 +45,10 @@ class CustomSalesOrder(SalesOrder):
         total_costs = 0.00
         if self.get("costs"): 
             for row in self.costs:
-                row.cost_value = self.net_total * row.cost_percentage / 100
+                if row.cost_type == "Material Cost's VAT":
+                    row.cost_value = self.total_rate_without_margin * row.cost_percentage / 100
+                else:
+                    row.cost_value = self.net_total * row.cost_percentage / 100
                 total_costs += row.cost_value
         self.total_costs = total_costs
         self.base_total_costs = self.total_costs * self.conversion_rate
@@ -52,9 +60,9 @@ class CustomSalesOrder(SalesOrder):
         self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
         self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
 
-    def on_submit(self):
-        super(CustomSalesOrder, self).on_submit()
-        self.create_project_automatically()
+    # def on_submit(self):
+    #     super(CustomSalesOrder, self).on_submit()
+    #     self.create_project_automatically()
 
     def create_project_automatically(self):
         if self.project: return
@@ -71,6 +79,13 @@ class CustomSalesOrder(SalesOrder):
             if not comm:
                 comm = 5
             self.commission_percentage = comm
+    
+    def validate_sales_commission(self):
+        commission_percentage_total = 0
+        for row in self.sales_commission:
+            commission_percentage_total += row.comm_percent
+        if commission_percentage_total != 100:
+            frappe.throw("The Total of Commission Percentages in Sales Commission is not equal to 100%")
 
 @frappe.whitelist()
 def make_bdn(sales_order, parents_items):
@@ -212,21 +227,21 @@ def make_delivery_note(source_name, target_doc=None, skip_item_mapping=False):
 @frappe.whitelist()
 def get_commission(commission_template):
 
-	from frappe.model import child_table_fields, default_fields
+    from frappe.model import child_table_fields, default_fields
 
-	template = frappe.get_doc("Sales Commission Template", commission_template)
+    template = frappe.get_doc("Sales Commission Template", commission_template)
 
-	template_list = []
-	for i, comm in enumerate(template.get("sales_commission")):
-		comm = comm.as_dict()
+    template_list = []
+    for i, comm in enumerate(template.get("sales_commission")):
+        comm = comm.as_dict()
 
-		for fieldname in default_fields + child_table_fields:
-			if fieldname in comm:
-				del comm[fieldname]
+        for fieldname in default_fields + child_table_fields:
+            if fieldname in comm:
+                del comm[fieldname]
 
-		template_list.append(comm)
+        template_list.append(comm)
 
-	return template_list
+    return template_list
 
 @frappe.whitelist()
 def get_commission_percent(sales_man):
