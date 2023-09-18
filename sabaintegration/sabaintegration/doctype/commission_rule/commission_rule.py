@@ -32,7 +32,7 @@ def condition_istrue(achieve_percent, condition_row):
 			return commission_precent_calcualation(condition_row, achieve_percent)
 		else: return "False"
 	elif condition_row.condition == 'greater than or equals':
-		if achieve_percent > condition_row.milestone:
+		if achieve_percent >= condition_row.milestone:
 			return commission_precent_calcualation(condition_row, achieve_percent)
 		else: return "False"
 	elif condition_row.condition == 'equals':

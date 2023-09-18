@@ -417,7 +417,7 @@ def set_leaders_extra(sales_men_comm, filters):
 	conditions = get_conditions(filters)
 
 	for sales_man in sales_men_comm:
-		comm = sales_men_comm[sales_man].get('achieved_target', 0)
+		comm = sales_men_comm[sales_man].get('achieved_target', 0) or 0
 		if  comm <= 0: continue
 		res = frappe.db.sql("""
 			 select name, base_expected_profit_loss_value as total, prm_sup_percentage, sec_sup_percentage
@@ -654,7 +654,7 @@ def apply_comm_on_so(args):
 		conditions = get_conditions(args)
 		sales_men = ""
 		for sales_man in commissions:
-			if commissions[sales_man].get("supervision_commission"):
+			if commissions[sales_man].get("primary_supervision_commission") or commissions[sales_man].get("secondary_supervision_commission"):
 				frappe.db.set_value("Quarter Quota", {
 					"sales_man": sales_man,
 					"year": args["year"],
@@ -680,16 +680,64 @@ def apply_comm_on_so(args):
 		""".format(conditions = conditions, sales_men = sales_men)
 		sales_orders = frappe.db.sql(strQuery, args, as_dict = 1)
 		so_number = 0
+		default_rule = get_default_rule()
 		for sales_order in sales_orders:
 			doc = frappe.get_doc("Sales Order", sales_order.name)
 
 			if not commissions.get(doc.primary_sales_man): continue
 
-			achieved_target = commissions[doc.primary_sales_man].get('achieved_target', 0)
+			achieved_target = commissions[doc.primary_sales_man].get('achieved_target', 0) or 0
 			if achieved_target <= 0: continue
+
+			employee = frappe.db.get_value("Sales Person", doc.primary_sales_man, "employee")
+			
+			# Set Primary and Secondary Supervisor in the SO, in Addition to the Supervision Commissions
+			if commissions[doc.primary_sales_man].get("primary_supervision_commission") or not get_leaders(employee, "name", "reports_to"):
+				doc.primary_supervisor = doc.primary_sales_man
+
+			else: 
+				
+				leader = get_leaders(employee, "name", "reports_to", None, direct_leader = True)
+
+				if leader:
+					sales_person = frappe.db.get_value("Sales Person", {"employee": leader}, "name")
+
+					doc.primary_supervisor = sales_person
+
+			if commissions.get(doc.primary_supervisor):
+				comm = calculate_commission(commissions[doc.primary_supervisor].get('achieved_target', 0), default_rule)
+				if comm: doc.primary_supervision_value = doc.prm_sup_percentage / 100 * doc.base_expected_profit_loss_value * comm / 100
+
+			if commissions[doc.primary_sales_man].get("secondary_supervision_commission") or not get_leaders(employee, "name", "reports_to"):
+				doc.secondary_supervisor = doc.primary_sales_man
+				
+			else:
+				employee = frappe.db.get_value("Sales Person", doc.primary_sales_man, "employee")
+				
+				leaders = get_leaders(employee, "name", "reports_to")
+
+				if leaders:
+					sales_person = frappe.db.get_value("Sales Person", {"employee": leaders[0]}, "name")
+
+					if sales_person == doc.primary_supervisor and len(leaders) > 1:
+						sales_person = frappe.db.get_value("Sales Person", {"employee": leaders[1]}, "name")
+
+						if sales_person: doc.secondary_supervisor = sales_person
+					
+					elif sales_person == doc.primary_supervisor and not len(leaders) > 1:
+						doc.secondary_supervisor = doc.primary_supervisor
+
+					elif sales_person != doc.primary_supervisor:
+						
+						doc.secondary_supervisor = sales_person
+
+			if commissions.get(doc.secondary_supervisor):
+				comm = calculate_commission(commissions[doc.secondary_supervisor].get('achieved_target', 0), default_rule)
+				if comm: doc.secondary_supervision_value = doc.sec_sup_percentage / 100 * doc.base_expected_profit_loss_value * comm / 100
 
 			commission = doc.base_expected_profit_loss_value * doc.commission_percentage / 100 * achieved_target / 100
 			
+			# Set Regular Commission for every Contributed Sales Man
 			for row in doc.get("sales_commission"):
 				row.base_commission_value = commission * row.comm_percent / 100
 				row.commission_value = row.base_commission_value / doc.conversion_rate 
