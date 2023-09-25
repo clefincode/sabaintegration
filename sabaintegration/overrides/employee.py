@@ -19,11 +19,11 @@ def share_todos(self):
 
 		prev_maintainer = self.get_doc_before_save().todo_maintainer_
 		leaders = get_leaders(prev_maintainer, "user_id", "todo_maintainer_")
-		if leaders : leaders.add(prev_maintainer)
+		if leaders : leaders.append(prev_maintainer)
 		else: leaders = [prev_maintainer]
 
 		employess = get_employees(self.user_id, "user_id", "todo_maintainer_")
-		if employess: employess.add(self.user_id)
+		if employess: employess.append(self.user_id)
 		else: employess = [self.user_id]
 
 		todos = frappe.db.get_all("ToDo", {"allocated_to": ("in", employess)})
@@ -54,11 +54,11 @@ def _share_todos(user_id, todo_maintainer_):
 	from frappe.share import add_docshare
 
 	leaders = get_leaders(todo_maintainer_, "user_id", "todo_maintainer_")
-	if leaders : leaders.add(todo_maintainer_)
+	if leaders : leaders.append(todo_maintainer_)
 	else: leaders = [todo_maintainer_]
 	
 	employess = get_employees(user_id, "user_id" ,"todo_maintainer_")
-	if employess: employess.add(user_id)
+	if employess: employess.append(user_id)
 	else: employess = [user_id]
 
 	todos = frappe.db.get_all("ToDo", {"allocated_to": ("in", employess)})
