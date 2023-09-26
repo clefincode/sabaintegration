@@ -264,7 +264,7 @@ def get_data(filters):
 		from `tabSales Order` as so
 		inner join `tabSales Commission` as comm on so.name = comm.parent
 		left outer join `tabQuarter Quota` as qq on qq.sales_man = comm.sales_person and qq.docstatus = 1 and qq.year = EXTRACT(YEAR FROM so.submitting_date) and qq.quarter = CONCAT('Q', CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0)) 
-    	where so.docstatus = 1	
+    	where so.docstatus = 1	and so.primary_sales_man != '' and so.primary_sales_man is not null	
 		{conditions}
 		{employees}
 		order by so.name, comm.sales_person
@@ -353,6 +353,13 @@ def get_leaders_supervision_values(row, leaders, filters, sales_person, get_supe
 
 def get_leader_supervision_values(row, filters, level):
 	leader = row['team_'+level+'_supervisior']
+	if not frappe.db.exists("Quarter Quota", {
+		"sales_man": leader,
+		"year": filters.get("year"),
+		"quarter": filters.get("quarter"),
+		"docstatus": 1
+	}):
+		frappe.throw("There is no Quarter Quota for Sales Person {}".format(leader))
 	doc = frappe.get_doc("Quarter Quota", {
 		"sales_man": leader,
 		"year": filters.get("year"),

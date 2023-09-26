@@ -84,68 +84,7 @@ frappe.query_reports["Sales Commission"] = {
 				}
 			})
 			dialog.show();
-		}),
-		report.page.add_inner_button(__('Create Journal Entry'), function() {
-			var dialog = new frappe.ui.Dialog({
-				title: __("Create Journal Entry"),
-				fields: [
-					{
-						"fieldname":"year",
-						"label": ("Year"),
-						"fieldtype": "Data",
-						"default": moment().year(),
-						"reqd": 1
-					},
-					{	
-						"fieldname":"quarter",
-						"label": ("Quarter"),
-						"fieldtype": "Select",
-						"options": ["Q1", "Q2", "Q3", "Q4"],
-						"default": get_quarter(),
-						"reqd": false,
-					},
-					{
-						"fieldname":"sales_man",
-						"label": ("Sales Man"),
-						"fieldtype": "Link",
-						"options": "Sales Person"
-					},
-					{
-						"fieldname":"annual",
-						"label": ("Annual?"),
-						"fieldtype": "Check",
-						"change": function() {
-							// If Field 1 has some value, make Field 2 mandatory.
-							if (d.get_value('annual')) {
-								d.get_field('quarter').df.reqd = false;
-							} else {
-								d.get_field('quarter').df.reqd = true;
-							}
-							d.refresh_fields();
-						}
-					},
-
-				],
-				primary_action_label: __("Create"),
-				primary_action: (args) => {
-					if(!args) return;
-					dialog.hide();
-					frappe.call({
-						method: "sabaintegration.sabaintegration.report.sales_commission.sales_commission.create_journal_entry",
-						args: {
-							args: args
-						},
-						callback: function(r) {
-							if(!r.exc) {
-								var doc = frappe.model.sync(r.message);
-								frappe.set_route("Form", r.message.doctype, r.message.name);
-							}
-						}
-					});
-				}
-			})
-			dialog.show();
-		});
+		})	
 	}
 };
 function get_quarter(){

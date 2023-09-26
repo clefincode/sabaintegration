@@ -19,7 +19,7 @@ class CustomSalesOrder(SalesOrder):
         self.validate_commission()
         self.validate_sales_commission()
         if self.get("_action") and self._action == 'submit':
-            self.submitting_date = now()
+            self.set_submitting_date()
         if self.get("_action") and self._action != 'update_after_submit':
             if not self.tc_name:
                 frappe.throw("Terms is a mandatory field")
@@ -72,8 +72,6 @@ class CustomSalesOrder(SalesOrder):
         frappe.msgprint("A new project <a href='/app/project/{project}'><b>{project}</b></a> has been created".format(project = project.name))
     
     def validate_commission(self):
-        if not self.primary_sales_man and self.sales_commission:
-            frappe.throw("You Need to Set a Primary Sales Man for the Sales Order")
         if not self.commission_percentage and self.primary_sales_man:
             comm = get_commission_percent(self.primary_sales_man)
             if not comm:
@@ -81,11 +79,24 @@ class CustomSalesOrder(SalesOrder):
             self.commission_percentage = comm
     
     def validate_sales_commission(self):
+        if not self.primary_sales_man and not self.sales_commission:
+            return
+
+        if not self.primary_sales_man and self.sales_commission:
+            frappe.throw("You Need to Set a Primary Sales Man for the Sales Order")
+
         commission_percentage_total = 0
         for row in self.sales_commission:
             commission_percentage_total += row.comm_percent
         if commission_percentage_total != 100:
             frappe.throw("The Total of Commission Percentages in Sales Commission is not equal to 100%")
+
+    def set_submitting_date(self):
+        if not self.amended_from:
+            self.submitting_date = now()
+        elif frappe.db.exists("Sales Order", self.amended_from):
+            submitting_date = frappe.db.get_value("Sales Order", self.amended_from, "submitting_date")
+            if submitting_date: self.submitting_date = submitting_date
 
 @frappe.whitelist()
 def make_bdn(sales_order, parents_items):

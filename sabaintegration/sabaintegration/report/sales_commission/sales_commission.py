@@ -336,7 +336,9 @@ def get_achievement_values(sales_orders):
 	total_achievement_values, achievement_values, emp_leaders = {}, {}, {}
 	checked_sos = []
 	for so in sales_orders:
-		
+		if not so.primary_sales_man:
+			frappe.throw("Sales Order: {} doesn't have a primary sales man for it".format(so.sales_order))
+
 		if so.sales_order in checked_sos: continue
 		checked_sos.append(so.sales_order)
 
@@ -345,22 +347,26 @@ def get_achievement_values(sales_orders):
 		total_achievement_values[so.primary_sales_man] = total_achievement_values.get(so.primary_sales_man,0) + so.base_expected_profit_loss_value
 
 		employee = get_employee(so.primary_sales_man)
-		leaders = get_leaders(employee.name, "name", "reports_to", None)
+		if not employee:
+			frappe.msgprint("Sales Person {} is not Linked to any Employee Record".format(so.primary_sales_man))
+		
+		else: 
+			leaders = get_leaders(employee.name, "name", "reports_to", None)
 
-		if leaders:
-			for leader in leaders:
-				leader_doc = frappe.get_doc("Employee", leader)
-				if check_if_leader(leader_doc):
-					sales_person = frappe.db.get_value("Sales Person", {"employee": leader}, "name")
-					
-					if not emp_leaders.get(so.primary_sales_man):
-						emp_leaders[so.primary_sales_man] = [sales_person]
-					elif sales_person not in emp_leaders[so.primary_sales_man]:
-						emp_leaders[so.primary_sales_man].append(sales_person)
+			if leaders:
+				for leader in leaders:
+					leader_doc = frappe.get_doc("Employee", leader)
+					if check_if_leader(leader_doc):
+						sales_person = frappe.db.get_value("Sales Person", {"employee": leader}, "name")
+						
+						if not emp_leaders.get(so.primary_sales_man):
+							emp_leaders[so.primary_sales_man] = [sales_person]
+						elif sales_person not in emp_leaders[so.primary_sales_man]:
+							emp_leaders[so.primary_sales_man].append(sales_person)
 
-					if not sales_person: continue
+						if not sales_person: continue
 
-					total_achievement_values[sales_person] = total_achievement_values.get(sales_person, 0) + so.base_expected_profit_loss_value
+						total_achievement_values[sales_person] = total_achievement_values.get(sales_person, 0) + so.base_expected_profit_loss_value
 	
 	return total_achievement_values, achievement_values, emp_leaders
 
@@ -596,49 +602,6 @@ def get_quarter_quota(sales_man, year, quarter):
 		kpi = quotas[0].kpi
 		
 	return total, kpi, msg
-
-@frappe.whitelist()
-def create_journal_entry(args):
-	args = json.loads(args)
-	if not args.get("year") or not args.get("quarter") and not args.get("annual"):
-		frappe.throw("Select Year and Quarter to create the journal entry")
-	
-	if args.get("annual"):
-		commissions, msg = get_annual_commission(args)
-	else:
-		commissions, msg = get_commissions(args)
-	
-	if msg:
-		msg = "Missing records in Quarter Quota: " + msg
-		frappe.throw(msg)
-	if commissions:
-		doc = frappe.new_doc("Journal Entry")
-		doc.is_quarter_commission = 1
-		doc.year = args.get("year")
-		doc.quarter = args.get("quarter") if args.get("quarter") else ''
-		accounts = []
-		for comm in commissions:
-			emp = frappe.db.get_value("Sales Person", comm, "employee")
-			if emp:
-				accounts.append({
-					'doctype':'Journal Entry Account',
-					'party_type': 'Employee',
-					'party': emp,
-					'debit_in_account_currency': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm"),
-					'debit': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm")
-				})
-			else:
-				accounts.append({
-					'debit_in_account_currency': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm"),
-					'debit': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm")
-				})
-			accounts.append({
-				'account': '11001002 - Cash EGP - S',
-				'credit_in_account_currency': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm"),
-				'credit': commissions[comm].get("total") or commissions[comm].get("additional_annual_comm")
-			})
-		doc.set("accounts", accounts)
-		return doc
 
 @frappe.whitelist()
 def apply_comm_on_so(args):
