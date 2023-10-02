@@ -28,8 +28,7 @@ frappe.ui.form.on('Quotation', {
 
 		$("[data-fieldname= 'expected_profit_loss'] .control-value").css("font-weight", "bold")
 		$("[data-fieldname= 'expected_profit_loss_value'] .control-value").css("font-weight", "bold")
-	},
-	onload: function(frm) {
+
         const originalSave = frappe.ui.form.save;
         frappe.ui.form.save = function() {
             if (cur_frm && cur_frm.doc.doctype === 'Quotation') {
@@ -93,8 +92,10 @@ frappe.ui.form.on('Quotation', {
 		}
 
 	},
-	conversion_rate: function(frm){
-		frm.events.set_rates_without_margin(frm)
+	conversion_rate: async function(frm){
+		frappe.dom.freeze();
+		await frm.events.set_rates_without_margin(frm)
+		frappe.dom.unfreeze();
 	},
 	currency: function(frm){
 		for (let i of frm.doc.items){
@@ -119,6 +120,7 @@ frappe.ui.form.on('Quotation', {
 			else i.discount_amount = 0;
 
 		}
+		cur_frm.doc.correct_to_save = 1
 		cur_frm.refresh_field("items");
 	},
 
@@ -190,7 +192,7 @@ erpnext.selling.CustomQuotationController = class CustomQuotationController exte
 				this.frm.set_df_property("buying_price_list", "hidden", 1);
             }
         }
-		else {
+		else if (!this.frm.doc.is_duplicated){
 			this.frm.doc.from_buying_price_list = 1
 			this.frm.toggle_reqd("buying_price_list", 1)
 			for (let d of this.frm.doc.items){

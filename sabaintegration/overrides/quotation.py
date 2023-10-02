@@ -20,8 +20,8 @@ class CustomQuotation(Quotation):
 		elemtoadd = abs(len(unsubmittedSQs) - len(submittedSQs))
 		
 		unsubmittedSQs = get_unsubmitted_sq(self)
-		if not unsubmittedSQs: return
-		unsubmittedSQs = list(set(unsubmittedSQs))
+		if unsubmittedSQs:
+			unsubmittedSQs = list(set(unsubmittedSQs))
 
 		if elemtoadd:
 			if len(submittedSQs) > len(unsubmittedSQs):
@@ -46,6 +46,10 @@ class CustomQuotation(Quotation):
 
 		if self.get("_action") and self._action != 'submit': 
 			if self.get("is_saved_from_ui"):
+				if not self.get("correct_to_save"):
+					if self.get_doc_before_save() and self.get_doc_before_save().get("conversion_rate") != self.conversion_rate :
+						frappe.throw("Saving can't be done because the rates before markup are not correct. Please refresh the page")
+				self.correct_to_save = 0
 				self.validate_removed_items()
 				self.is_saved_from_ui = 0
 
