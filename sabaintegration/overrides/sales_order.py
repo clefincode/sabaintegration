@@ -27,6 +27,10 @@ class CustomSalesOrder(SalesOrder):
     def before_update_after_submit(self):
         super(CustomSalesOrder, self).before_update_after_submit()
         self.validate_sales_commission()
+        
+    def on_update_after_submit(self):
+        self.update_total_margin()
+        self.update_costs()
 
     def update_total_margin(self):
         self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
