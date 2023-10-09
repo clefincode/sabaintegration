@@ -390,7 +390,9 @@ def make_quotation(source_name, target_doc=None):
         packed_items = [[item.item_code, item.parent_item, item.section_title] for item in doclist.get("packed_items")] or []
         packed_rfg = [item.item_code for item in rfq_doc.packed_items]
         # for conversion rate pupose
-        conversion_rate = get_exchange_rate(doclist.currency, "USD")
+        if not quotation:
+            conversion_rate = get_exchange_rate(doclist.currency, "USD")
+        else: conversion_rate = doclist.get("conversion_rate", 1)
 
         # iterate through items in request for quotation items
         for opp_row in opportunity_option_items:
@@ -525,7 +527,7 @@ def make_quotation(source_name, target_doc=None):
                                     item.qty += flt(opp_row.qty, precision) - flt(item.qty, precision)
                                     break
                     break
-        add_supplier_quotation_row(source_name, opportunity, opportunity_option_number, doclist)
+        add_supplier_quotation_row(source_name, request_for_quotation, opportunity, opportunity_option_number, doclist)
         
         #if quotation: 
         #doclist.save(ignore_permissions = True)
@@ -567,10 +569,11 @@ def add_packed_item(item, qty, opp_row, conversion_rate, doclist):
     add_item_to_table(packed_item, "packed_items", doclist, fields)
     return rate
 
-def add_supplier_quotation_row(supplier_quotation, opportunity, opportunity_option_number, doc):
+def add_supplier_quotation_row(supplier_quotation, request_for_quotation, opportunity, opportunity_option_number, doc):
     "add record of the supplier quotation in the quotation"
     from_sq = frappe.new_doc("From Supplier Quotation")
     from_sq.supplier_quotation = supplier_quotation
+    from_sq.request_for_quotation = request_for_quotation
     from_sq.opportunity = opportunity
     from_sq.opportunity_option_number = opportunity_option_number
     doc.append("supplier_quotations", from_sq)

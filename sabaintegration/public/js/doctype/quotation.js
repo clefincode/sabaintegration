@@ -47,11 +47,15 @@ frappe.ui.form.on('Quotation', {
 			frm.toggle_display('option_number_from_opportunity', true)
 		}
 	},
-	// items_on_form_rendered: function(){
-	// 	if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
-	// 		cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
-	// },
-	refresh: function(frm){
+	items_on_form_rendered: function(){
+		if (frappe.user.has_role("0 Selling -Quotation-Edit Rate without Markup")) 
+			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
+	},
+	refresh: async function(frm){
+		frm.events.set_base_rates();
+		if (frm.is_new()){
+			frappe.model.set_value(frm.doc.doctype, frm.doc.name, "costs_template", "Projects Indirect Cost Analysis");
+		}
 		if(frm.$wrapper.find(`.form-documents [data-doctype="Opportunity"]`).length == 0 && frm.doc.opportunity ){
             frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
                 `<div class="document-link" data-doctype="Opportunity">
@@ -60,21 +64,24 @@ frappe.ui.form.on('Quotation', {
                         <a class="badge-link" href="/app/opportunity/view/list?name=${frm.doc.opportunity}">Opportunity</a>
                 </div>`);
         }
-		if(frm.$wrapper.find(`.form-documents [data-doctype="Supplier Quotation"]`).length == 0 && frm.doc.supplier_quotation){
-            frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
-                `<div class="document-link" data-doctype="Supplier Quotation">
-                    <div class="document-link-badge" data-doctype="Supplier Quotation">
-                        <span class="count">1</span>
-                        <a class="badge-link" href="/app/supplier-quotation/view/list?name=${frm.doc.supplier_quotation}">Supplier Quotation</a>
-                </div>`);
-        }
-		if(frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0){
-			frappe.call({
-				method: "sabaintegration.overrides.quotation.get_rfq_related_to_quotation",
-				args: {
-					doc_name: frm.doc.name
-				},
-				callback: function(r) {
+		else if (frm.$wrapper.find(`.form-documents [data-doctype="Opportunity"]`).length > 0){
+			frm.$wrapper.find('.form-documents .document-link-badge[data-doctype="Opportunity"] a.badge-link').each(function(){
+
+				if (frm.doc.opportunity){
+					$(this).attr('href', `/app/opportunity/view/list?name=${frm.doc.opportunity}`);
+				}
+				else $(this).removeAttr('href');
+				
+			  });
+		}
+
+		await frappe.call({
+			method: "sabaintegration.overrides.quotation.get_docs_related_to_quotation",
+			args: {
+				doc_name: frm.doc.name
+			},
+			callback: function(r) {
+				if (frm.$wrapper.find(`.form-documents [data-doctype="Request for Quotation"]`).length == 0){
 					if(r.message.rfq && r.message.rfq.length != 0){					
 						frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
 							`<div class="document-link" data-doctype="Request for Quotation">
@@ -82,14 +89,69 @@ frappe.ui.form.on('Quotation', {
 									<span class="count">${r.message.rfq.length}</span>
 									<a class="badge-link" href='/app/request-for-quotation/view/list?name=["in" , [${r.message.rfq.map((r) => {return r.request_for_quotation?'"'+r.request_for_quotation+'"':''})}]]'>Request for Quotation</a>
 							</div>`);
-				}					
+					}
+				}
+				else {
+					frm.$wrapper.find('.form-documents .document-link-badge[data-doctype="Request for Quotation"] a.badge-link').each(function(){
+						const spanElement = $(this).closest('.document-link-badge').find('span.count');
+						
+						// Change the text value of the 'span.count'
+						if(r.message.rfq && r.message.rfq.length != 0){	
+							spanElement.removeClass('hidden');
+							spanElement.text(r.message.rfq.length);
+							$(this).attr('href', `/app/request-for-quotation/view/list?name=["in" , [${r.message.rfq.map((r) => {return r.request_for_quotation?'"'+r.request_for_quotation+'"':''})}]]`);
+						}
+						else {
+							spanElement.addClass('hidden');
+							$(this).removeAttr('href');
+						}
+					})
+				}
+				if (frm.$wrapper.find(`.form-documents [data-doctype="Supplier Quotation"]`).length == 0){
+					if(r.message.sq && r.message.sq.length != 0){					
+						frm.$wrapper.find(".form-documents .row .col-md-4:first-child").append(
+							`<div class="document-link" data-doctype="Supplier Quotation">
+								<div class="document-link-badge" data-doctype="Supplier Quotation">
+									<span class="count">${r.message.sq.length}</span>
+									<a class="badge-link" href='/app/supplier-quotation/view/list?name=["in" , [${r.message.sq.map((r) => {return r.supplier_quotation?'"'+r.supplier_quotation+'"':''})}]]'>SupplierQuotation</a>
+							</div>`);
+					}
+				}
+				else {
+					frm.$wrapper.find('.form-documents .document-link-badge[data-doctype="Supplier Quotation"] a.badge-link').each(function(){
+						const spanElement = $(this).closest('.document-link-badge').find('span.count');
+						
+						// Change the text value of the 'span.count'
+						if(r.message.sq && r.message.sq.length != 0){	
+							spanElement.removeClass('hidden');
+							spanElement.text(r.message.sq.length);
+							$(this).attr('href', `/app/supplier-quotation/view/list?name=["in" , [${r.message.sq.map((r) => {return r.supplier_quotation?'"'+r.supplier_quotation+'"':''})}]]`);
+						}
+						else {
+							spanElement.addClass('hidden');
+							$(this).removeAttr('href');
+						}
+					})
+				}
 			}
-			});			
-        }
-		frm.events.set_base_rates();
-		if (frm.is_new()){
-			frappe.model.set_value(frm.doc.doctype, frm.doc.name, "costs_template", "Projects Indirect Cost Analysis");
+		});			
+
+		const badgeLinks = document.querySelectorAll('.document-link-badge a.badge-link');
+
+		// Loop through all the selected 'a' tags
+		badgeLinks.forEach((badgeLink) => {
+		// Check if the 'href' attribute exists
+		if (badgeLink.hasAttribute('href')) {
+			// Find the parent div element
+			const parentDiv = badgeLink.closest('.document-link-badge');
+			// Find the span within the parent div and remove 'hidden' class
+			const spanElement = parentDiv.querySelector('span.count');
+			if (spanElement.textContent.trim() !== "") {
+				// Remove 'hidden' class
+				spanElement.classList.remove('hidden');
+			  }
 		}
+		});
 
 	},
 	conversion_rate: async function(frm){
