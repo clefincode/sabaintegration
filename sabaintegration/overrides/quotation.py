@@ -480,11 +480,32 @@ def get_costs(costs_template):
 	return template_list
 
 @frappe.whitelist()
-def get_rfq_related_to_quotation(doc_name):
+def get_docs_related_to_quotation(doc_name):
+	sqs = frappe.db.sql(f"""
+	SELECT DISTINCT supplier_quotation
+	FROM `tabFrom Supplier Quotation`
+	WHERE parent = '{doc_name}'
+	""" , as_dict = True)
+
 	rfq = frappe.db.sql(f"""
 	SELECT DISTINCT request_for_quotation
 	FROM `tabFrom Supplier Quotation`
 	WHERE parent = '{doc_name}'
 	""" , as_dict = True)
 
-	return {"rfq" : rfq}
+	if not rfq or not rfq[0].get("request_for_quotation"):
+		rfq, added_rfq = [] , []
+		sqs_names = frappe.db.get_all("From Supplier Quotation", {"parent": doc_name}, "supplier_quotation")
+		if sqs_names:
+			for sq in sqs_names:
+				doc = frappe.get_doc("Supplier Quotation", sq.supplier_quotation)
+				for item in doc.items:
+					if item.request_for_quotation:
+						if not item.request_for_quotation in added_rfq:
+							rfq.append({
+								"request_for_quotation": item.request_for_quotation
+							})
+							added_rfq.append(item.request_for_quotation)
+
+						break
+	return {"rfq" : rfq, "sq": sqs}
