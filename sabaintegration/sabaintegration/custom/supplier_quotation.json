@@ -736,7 +736,7 @@
    "email": 0,
    "export": 0,
    "idx": 1,
-   "if_owner": 0,
+   "if_owner": 1,
    "import": 0,
    "modified": "2017-04-27 08:56:10.642030",
    "modified_by": "Administrator",
