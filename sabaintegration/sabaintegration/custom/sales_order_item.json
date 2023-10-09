@@ -102,7 +102,7 @@
    "insert_after": "margin_from_supplier_quotation",
    "is_system_generated": 0,
    "is_virtual": 0,
-   "label": "Rate without Markup",
+   "label": "Cost",
    "length": 0,
    "mandatory_depends_on": null,
    "modified": "2023-04-16 13:53:01.295771",

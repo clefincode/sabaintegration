@@ -232,7 +232,7 @@
    "insert_after": "margin_from_supplier_quotation",
    "is_system_generated": 1,
    "is_virtual": 0,
-   "label": "Rate without Markup",
+   "label": "Cost",
    "length": 0,
    "mandatory_depends_on": null,
    "modified": "2022-11-15 14:06:34.156376",
