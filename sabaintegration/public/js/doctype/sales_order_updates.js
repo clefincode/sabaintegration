@@ -27,6 +27,10 @@ frappe.ui.form.on("Sales Order", {
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
 	},
 	refresh: function(frm){
+		frm.set_df_property("expected_profit_loss", "read_only", 1);
+	    frm.set_df_property("expected_profit_loss_value", "read_only", 1);
+	    frm.set_df_property("base_expected_profit_loss_value", "read_only", 1);
+
 		// Show the Download button under the items child table in submitted documents
 		frm.fields_dict.items.grid.wrapper.find('.grid-upload').removeClass("hidden");
 		if(frm.doc.docstatus == 1){

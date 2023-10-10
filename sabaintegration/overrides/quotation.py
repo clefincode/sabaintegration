@@ -17,21 +17,24 @@ class CustomQuotation(Quotation):
 		submittedSQs = copy.deepcopy(self.get("supplier_quotations"))
 		if not submittedSQs: return
 
-		elemtoadd = abs(len(unsubmittedSQs) - len(submittedSQs))
-		
 		unsubmittedSQs = get_unsubmitted_sq(self)
+		len_unsubmittedSQs = 0
+
 		if unsubmittedSQs:
 			unsubmittedSQs = list(set(unsubmittedSQs))
+			len_unsubmittedSQs = len(unsubmittedSQs)
+		else: unsubmittedSQs = []
 
+		elemtoadd = abs(len_unsubmittedSQs - len(submittedSQs))
+		
 		if elemtoadd:
-			if len(submittedSQs) > len(unsubmittedSQs):
+			if len(submittedSQs) > len_unsubmittedSQs:
 				for i in range(elemtoadd):
 					unsubmittedSQs.append("")
-			elif len(submittedSQs) < len(unsubmittedSQs):
+			elif len(submittedSQs) < len_unsubmittedSQs:
 				for i in range(elemtoadd):
 					submittedSQs.append("")
 		SQs = list(zip(submittedSQs, unsubmittedSQs))
-
 		return frappe.render_template("templates/includes/supplier_quotations_table.html", {"SQs": SQs})
 
 	def validate(self):
