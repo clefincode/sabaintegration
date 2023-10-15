@@ -247,7 +247,7 @@ def get_data(filters):
 		if not sales_person: return
 
 		if not filters.get("sales_man"):
-			employees = "and so.primary_sales_man in ({0}) or comm.sales_person = '{1}' ".format(employees_query(sales_person), sales_person)
+			employees = "and (so.primary_sales_man in ({0}) or comm.sales_person = '{1}' ) ".format(employees_query(sales_person), sales_person)
 		else:
 			sales_man = employees_query(sales_person, filters.get("sales_man", None))
 			if not sales_man: return
