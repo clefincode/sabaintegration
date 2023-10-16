@@ -52,19 +52,24 @@ frappe.ui.form.on('Bundle Delivery Note', {
 	refresh: function(frm) {
 		if(frm.is_new()){
 			frm.set_df_property('excluded_items', 'hidden', 1)
-		}else{
+		}else if (!frm.doc.is_return){
 			frm.set_df_property('excluded_items', 'hidden', 0)
 		}
 		erpnext.hide_company();
-		if (frm.doc.docstatus == 0){
+		if (frm.doc.docstatus == 0 && frm.doc.is_return == 0){
 			frm.add_custom_button(__('Get Items'), function () {
 				frm.trigger("get_items");
 			});
-			if(!frm.is_new()){
+			if(!frm.is_new() && frm.doc.is_return == 0){
 				frm.add_custom_button(__('Exclude Items'), function () {
 					frm.trigger("exclude_items")
 				});
 			}
+		}
+		else if (frm.doc.docstatus == 1 && frm.doc.is_return == 0){
+			frm.add_custom_button('Bundle Return', function () {
+				frm.trigger("bundle_return");
+			}, "Create");
 		}
 	},
 	validate: function(frm){
@@ -105,6 +110,7 @@ frappe.ui.form.on('Bundle Delivery Note', {
 				sales_order: frm.doc.sales_order,
 				parents : items, 
 			},
+			freeze: true,
 			callback: function(r){
 				if (r.exc || !r.message || !r.message.length) {
 					resolve();
@@ -180,7 +186,12 @@ frappe.ui.form.on('Bundle Delivery Note', {
 			});
 		})
 	},
-
+	bundle_return: function(){
+		frappe.model.open_mapped_doc({
+			method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.create_return_bdn",
+			frm: cur_frm
+		})
+	},
 	setup_excluded_items: function(frm , callback) {
 		let me = this;		
 		const field = [
@@ -196,15 +207,34 @@ frappe.ui.form.on('Bundle Delivery Note', {
 						fieldtype: "Link",
 						in_list_view: 1,
 						reqd: 1,
-						get_query: () => {
+						get_query: (data) => {
 							return {
 								query:"sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_parents_items",
 								filters: {
 									"parent": frm.doc.name,
-									"item_parent":frm.doc.item_parent
+									"item_parent":frm.doc.item_parent,
+									"child_item": data.item_code
 								}
+							}	
+						},
+						change: function() {
+							const item_code = this.grid_row.on_grid_fields_dict.item_code.get_value();
+							const parent_item = this.get_value();
+
+							if (item_code && parent_item){
+								frappe.call({
+									method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_item_qty",
+									args: {
+										sales_order: cur_frm.doc.sales_order,
+										item_code: item_code,
+										parent_item: parent_item
+									},
+									callback: (r) => {
+										this.grid_row.on_grid_fields_dict
+											.qty.set_value(r.message || 0);
+									}
+								})
 							}
-							
 						}
 					},
 					{
@@ -222,7 +252,33 @@ frappe.ui.form.on('Bundle Delivery Note', {
 									"parent_item": data.parent_item
 								}
 							}							
+						},
+						change: function() {
+							const item_code = this.get_value();
+							const parent_item = this.grid_row.on_grid_fields_dict.parent_item.get_value();
+
+							if (item_code && parent_item){
+								frappe.call({
+									method: "sabaintegration.sabaintegration.doctype.bundle_delivery_note.bundle_delivery_note.get_item_qty",
+									args: {
+										sales_order: cur_frm.doc.sales_order,
+										item_code: item_code,
+										parent_item: parent_item
+									},
+									callback: (r) => {
+										this.grid_row.on_grid_fields_dict
+											.qty.set_value(r.message || 0);
+									}
+								})
+							}
 						}
+					},
+					{
+						fieldname: "qty",
+						label: __("Qty"),
+						fieldtype: "Float",
+						read_only: 1,
+						in_list_view: 1,
 					},
 					{
 						fieldname: "alt_item",
@@ -243,16 +299,16 @@ frappe.ui.form.on('Bundle Delivery Note', {
 						options: "Warehouse",
 						label: __("Warehouse"),
 						fieldtype: "Link",
-						in_list_view: 1,
+						in_list_view: 0,
 					}
 				],
 			}
 		];
 		let dialog = frappe.prompt(field, data => {
-			let items = data.items || [];			
+			let items = data.items || [];		
 			callback(frm, data, items);
 		})
-		
+
 	},
 
 	set_rate_and_qty: function(frm, cdt, cdn) {

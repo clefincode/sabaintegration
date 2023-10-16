@@ -10,6 +10,10 @@
   "bundle_delivery_note",
   "sales_order",
   "delivery_note",
+  "column_break_4",
+  "is_return",
+  "return_against",
+  "section_break_7",
   "items"
  ],
  "fields": [
@@ -50,11 +54,33 @@
    "label": "Items",
    "options": "Bundle Delivery Note State Item",
    "read_only": 1
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_return",
+   "fieldtype": "Check",
+   "label": "Is Return",
+   "read_only": 1
+  },
+  {
+   "fieldname": "return_against",
+   "fieldtype": "Link",
+   "label": "Return Against",
+   "options": "Bundle Delivery Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_7",
+   "fieldtype": "Section Break"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2023-04-04 10:01:28.065308",
+ "modified": "2023-10-15 15:11:04.493550",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Bundle Delivery Note State",
