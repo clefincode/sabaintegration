@@ -424,3 +424,9 @@ frappe.ui.form.on('Bundle Delivery Note Item', {
 		}
 	},
 })
+
+frappe.ui.form.on('Bundle Delivery Note Parent Item', {
+	parents_items_remove: function(frm, cdt, cdn){
+		frm.trigger("get_items")
+	}
+})

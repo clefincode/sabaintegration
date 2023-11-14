@@ -69,8 +69,13 @@ class BundleDeliveryNote(Document):
 			return _("Row # {0}:").format(row_num + 1) + " " + msg
 
 		self.validation_messages = []
-
+		accepted_items = get_items(**{"sales_order": self.sales_order, "parents": self.items})
+		
 		for row_num, row in enumerate(self.stock_entries):
+
+			if not self.validate_packed_items(row, accepted_items):
+					self.validation_messages.append(_get_msg(row_num, _("This item doesn't belonge to any parents in the BDN")))
+
 			if self.get("_action") and self._action == "submit":
 				self.validate_qty(row)
 				self.validate_batch_no(row.item_code, row)
@@ -93,6 +98,12 @@ class BundleDeliveryNote(Document):
 					msgprint(msg)
 
 				raise frappe.ValidationError(self.validation_messages)
+
+	def validate_packed_items(self, row, accepted_items):
+		for item in accepted_items:
+			if item.item_code == row.item_code:
+				return True
+		return False
 
 	def validate_excluded_items(self):
 		# excluded item of a bundle shouldn't be excluded more than once in the delivery note
@@ -742,6 +753,10 @@ def get_reminded_bundle_items(sales_order_name):
 @frappe.whitelist()
 @frappe.validate_and_sanitize_search_inputs
 def get_parents_items(doctype, txt, searchfield, start, page_len, filters):
+	if filters.get('item_parent'):
+		result = (filters.get('item_parent'), )
+		return (result, )
+
 	strQuery = """
 		SELECT bdnp.item_code 
 		FROM `tabBundle Delivery Note Parent Item` as bdnp
