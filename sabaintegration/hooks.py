@@ -43,7 +43,8 @@ doctype_js = {
 	"Product Bundle": "public/js/doctype/product_bundle.js",
 	"Lead": "public/js/doctype/lead.js",
 	"Attendance": "public/js/doctype/attendance.js",
-	"Purchase Order": "public/js/doctype/purchase_order.js"
+	"Purchase Order": "public/js/doctype/purchase_order.js",
+    "Expense Claim": "public/js/doctype/expense_claim.js"
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
@@ -114,7 +115,8 @@ override_doctype_class = {
 	#'Employee': 'sabaintegration.overrides.employee.CustomEmployee',
 	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry',
     'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
-    'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder'
+    'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder',
+    'Expense Claim': 'sabaintegration.overrides.expense_claim.CustomExpenseClaim'
 }
 
 # Document Events
@@ -124,13 +126,16 @@ override_doctype_class = {
 doc_events = {
     "Employee": {
         "validate": "sabaintegration.overrides.employee.custom_validate"
-    }
+    },
+    "Journal Entry":{
+        "validate": "sabaintegration.www.api.custom_validate_je"
+	}
 }
 
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
+scheduler_events = {
 # 	"all": [
 # 		"sabaintegration.tasks.all"
 # 	],
@@ -143,10 +148,10 @@ doc_events = {
 # 	"weekly": [
 # 		"sabaintegration.tasks.weekly"
 # 	]
-# 	"monthly": [
-# 		"sabaintegration.tasks.monthly"
-# 	]
-# }
+	"monthly": [
+		"sabaintegration.sabaintegration.doctype.sales_order_payment.sales_order_payment.set_payment_for_quarter"
+	]
+}
 
 # Testing
 # -------
