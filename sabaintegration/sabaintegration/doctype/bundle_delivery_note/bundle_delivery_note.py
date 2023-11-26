@@ -26,6 +26,8 @@ class BundleDeliveryNote(Document):
 			self.items = [item.item_code for item in self.parents_items]
 
 	def validate(self):
+		if self.is_new():
+			self.excluded_items = []
 		self.validate_parent()
 		self.validate_data()
 		self.validate_excluded_items()
