@@ -48,7 +48,7 @@ frappe.ui.form.on('Quotation', {
 		}
 	},
 	items_on_form_rendered: function(){
-		if (frappe.user.has_role("0 Selling -Quotation-Edit Rate without Markup")) 
+		if (frappe.user.has_role("0 Selling -Quotation-Edit Rate without Markup") || frappe.user.has_role("0 Selling -Quotation-Edit Cost")) 
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
 	},
 	refresh: async function(frm){
