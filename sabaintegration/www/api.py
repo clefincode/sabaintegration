@@ -1,7 +1,7 @@
 import frappe
 import json
 from six import string_types
-from frappe.utils import flt
+from frappe.utils import flt, now
 from frappe.model.mapper import get_mapped_doc
 from frappe.model.naming import make_autoname
 from erpnext.selling.doctype.sales_order.sales_order import is_product_bundle, set_delivery_date
@@ -646,3 +646,18 @@ def create_sqs_if_necessary(new_s_rfqs, cancelled_sqs):
 		if not frappe.db.exists("Supplier Quotation Item", {"request_for_quotation": rfq.name}):
 			rfq.create_sq_automatically()
 		rfq.update_sqs_rates(cancelled_sqs)
+
+def custom_validate_je(self, *args, **kwargs):
+	from dateutil.relativedelta import relativedelta
+	from frappe.utils import now_datetime
+	if self.get("_action") and self._action == 'submit':
+
+			# Get the current date and time as a datetime object
+			now = now_datetime()
+
+			# Add 3 months to it
+			new_date = now
+			#new_date = now + relativedelta(months=-8)
+
+			# If needed, convert it back to string
+			self.submitting_date = new_date.strftime("%Y-%m-%d %H:%M:%S")

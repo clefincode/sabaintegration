@@ -24,6 +24,7 @@ class QuarterQuota(Document):
 		is_leader, leader_id = check_if_team_leader(self.sales_man)
 		self.set_total_quota(is_leader, leader_id)
 		self.set_leader_commission_values()
+		frappe.db.set_value("Quarter Quota", self.name, "total_quota", self.total_quota)
 
 	def set_position(self):
 		employee = get_employee(self.sales_man)

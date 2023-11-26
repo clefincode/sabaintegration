@@ -650,7 +650,7 @@ def apply_comm_on_so(args):
 			if not commissions.get(doc.primary_sales_man): continue
 
 			achieved_target = commissions[doc.primary_sales_man].get('achieved_target', 0) or 0
-			if achieved_target <= 0: continue
+			#if achieved_target <= 0: continue
 
 			employee = frappe.db.get_value("Sales Person", doc.primary_sales_man, "employee")
 			
@@ -667,9 +667,11 @@ def apply_comm_on_so(args):
 
 					doc.primary_supervisor = sales_person
 
-			if commissions.get(doc.primary_supervisor):
+			if commissions.get(doc.primary_supervisor) and achieved_target > 0:
 				comm = calculate_commission(commissions[doc.primary_supervisor].get('achieved_target', 0), default_rule)
 				if comm: doc.primary_supervision_value = doc.prm_sup_percentage / 100 * doc.base_expected_profit_loss_value * comm / 100
+			elif achieved_target <= 0:
+				doc.primary_supervision_value = 0
 
 			if commissions[doc.primary_sales_man].get("secondary_supervision_commission") or not get_leaders(employee, "name", "reports_to"):
 				doc.secondary_supervisor = doc.primary_sales_man
@@ -694,9 +696,11 @@ def apply_comm_on_so(args):
 						
 						doc.secondary_supervisor = sales_person
 
-			if commissions.get(doc.secondary_supervisor):
+			if commissions.get(doc.secondary_supervisor) and achieved_target > 0:
 				comm = calculate_commission(commissions[doc.secondary_supervisor].get('achieved_target', 0), default_rule)
 				if comm: doc.secondary_supervision_value = doc.sec_sup_percentage / 100 * doc.base_expected_profit_loss_value * comm / 100
+			elif achieved_target <= 0:
+				doc.secondary_supervision_value  = 0
 
 			commission = doc.base_expected_profit_loss_value * doc.commission_percentage / 100 * achieved_target / 100
 			
