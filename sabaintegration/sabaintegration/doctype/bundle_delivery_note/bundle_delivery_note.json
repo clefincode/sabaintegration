@@ -11,6 +11,7 @@
   "sales_order",
   "multiple_items",
   "column_break_3",
+  "posting_date",
   "price_list",
   "company",
   "project",
@@ -157,12 +158,17 @@
    "label": "Return Against",
    "mandatory_depends_on": "eval:doc.is_return",
    "options": "Bundle Delivery Note"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Posting Date"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2023-11-23 08:13:25.696877",
+ "modified": "2023-11-27 09:35:47.610160",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Bundle Delivery Note",
