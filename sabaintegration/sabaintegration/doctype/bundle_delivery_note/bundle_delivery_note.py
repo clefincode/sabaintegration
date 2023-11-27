@@ -634,12 +634,13 @@ def get_items(**kwargs):
 		return itemslist
 
 def add_removed_item(bundle_item, delivery_note):
-	pi_row = delivery_note.append("packed_items", {})
+	item_row = ""
 	for item in delivery_note.items:
 		if item.item_code == bundle_item.parent_item:
 			item_row = item
 			break
 	if not item_row: return
+	pi_row = delivery_note.append("packed_items", {})
 	bundle_item.description = frappe.db.get_value("Item", bundle_item.item_code, "description")
 	bundle_item.uom = frappe.db.get_value("Item", bundle_item.item_code, "stock_uom")
 	bundle_item.qty = 0

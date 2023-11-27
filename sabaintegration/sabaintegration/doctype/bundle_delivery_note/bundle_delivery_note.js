@@ -13,7 +13,7 @@ frappe.ui.form.on('Bundle Delivery Note', {
 		frm.set_df_property('excluded_items', 'cannot_delete_rows', true);
 	},
 	onload: function(frm){
-		if (!frm.doc.posting_date) {
+		if (!frm.doc.posting_date && frm.doc.docstatus == 0) {
 			frm.doc.posting_date = frappe.datetime.nowdate();
 			frm.refresh_field("posting_date");
 			frm.dirty();
