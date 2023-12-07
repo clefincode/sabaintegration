@@ -80,7 +80,7 @@ def get_employees(maintainer_id, maintainer_id_fieldname, maintainer_field, empl
 			get_employees(employee.get(maintainer_id_fieldname), maintainer_id_fieldname, maintainer_field, employees_list)
 	else:
 		return
-	return set(employees_list)
+	return list(set(employees_list))
 
 def get_leaders(user, user_field, maintainer_field, employees = None, direct_leader = False):
     if not employees:
