@@ -444,6 +444,7 @@ class BundleDeliveryNote(Document):
 	def remove_packed_items(self):
 		if self.get("delivery_note") and frappe.db.exists("Bundle Delivery Note State", self.name):
 			delivery_note = frappe.get_doc("Delivery Note", self.delivery_note)
+			if delivery_note.docstatus > 0: return
 			bdn_state = frappe.get_doc("Bundle Delivery Note State", self.name)
 			idx_list = []
 			for item in bdn_state.items:
@@ -671,6 +672,7 @@ def set_details(bundle_item, item_row, pi_row, delivery_note):
 
 def delete_dn(bdn, delivery_note):
 	doc = frappe.get_doc("Delivery Note", delivery_note)
+	if doc.docstatus > 0: return
 	if doc.get("packed_items"):
 		for item in doc.get("packed_items"):
 			if item.qty > 0: return
