@@ -27,11 +27,11 @@ class CustomExpenseClaim(ExpenseClaim):
                 d.sanctioned_amount = 0.0
                 d.sanctioned_amount_in_expense_claim_currency = 0.0
 
-            self.total_claimed_amount += flt(d.amount)
-            self.total_sanctioned_amount += flt(d.sanctioned_amount)
-
             self.total_claimed_amount_in_expense_claim_currency += flt(d.amount_in_expense_claim_currency)
             self.total_sanctioned_amount_in_expense_claim_currency += flt(d.sanctioned_amount_in_expense_claim_currency)
+
+        self.total_claimed_amount += flt(self.total_claimed_amount_in_expense_claim_currency * self.exchange_rate, 2)
+        self.total_sanctioned_amount += flt(self.total_sanctioned_amount_in_expense_claim_currency * self.exchange_rate, 2)
 
     def validate_advances(self):
         self.total_advance_amount, self.total_advance_amount_in_expense_claim_currency = 0, 0
