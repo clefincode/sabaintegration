@@ -132,8 +132,6 @@ def get_conditions(filters):
 	conditions = ""
 	if filters.get("sales_order"):
 		conditions += " and so.name = %(sales_order)s"
-	if filters.get("sales_man"):
-		conditions += " and comm.sales_person = %(sales_man)s"
 	if filters.get("year"):
 		conditions += " and EXTRACT(YEAR FROM je.submitting_date) = %(year)s"
 	if filters.get("quarter"):
@@ -165,7 +163,21 @@ def get_data(filters):
 
 def get_payments_details(filters, employees = '', add_supervisior_row = False):
 	conditions = get_conditions(filters)
-
+	sos = ''
+	if employees:
+		soslist = frappe.db.sql("""
+			select distinct so.name
+			from `tabSales Order` as so
+			inner join `taSales Commission` as comm on comm.parent = so.name
+			where so.docstatus = 1
+			{employees}
+		""".format(employees = employees), as_list = 1)
+		if soslist:
+			sos = " and so.name in ("
+			for so in soslist:
+				sos += " '{}',".format(so[0])
+			sos = sos[:-1] + ")"
+	
 	strQuery = """
 		select distinct so.name as sales_order, so.base_grand_total,
 		je.name as entry, jea.name as account_name, 
@@ -177,6 +189,7 @@ def get_payments_details(filters, employees = '', add_supervisior_row = False):
 		inner join `tabSales Invoice Item` as sii on sii.parent = si.name
 		inner join `tabSales Order` as so on so.name = sii.sales_order and so.docstatus = 1
 		where je.docstatus = 1
+		{sos}
 		{conditions}
 
 		union
@@ -189,10 +202,11 @@ def get_payments_details(filters, employees = '', add_supervisior_row = False):
 		inner join `tabJournal Entry Account` as jea on jea.parent = je.name
 		inner join `tabSales Order` as so on so.name = jea.reference_name and so.docstatus = 1
 		where je.docstatus = 1
+		{sos}
 		{conditions}
 		order by sales_order
 
-	""".format(conditions = conditions)
+	""".format(conditions = conditions, sos = sos)
 	so_entries = frappe.db.sql(strQuery, filters, as_dict = 1)
 	if not add_supervisior_row: 
 		return so_entries
@@ -226,11 +240,11 @@ def get_payments_details(filters, employees = '', add_supervisior_row = False):
 
 def set_payment_in_debit_currency(entry):
 	doc = frappe.get_doc("Journal Entry", entry["entry"])
-	account_name, credit_currency = entry["account_currency"], entry["account_name"]
+	credit_currency, account_name = entry["account_currency"], entry["account_name"]
 	company_currency = get_company_currency(get_default_company())
+	
 	for account in doc.accounts:
 		if account_name != account.name and account.debit > 0:
-			
 			# Nothing to convert
 			if credit_currency == account.account_currency:
 				pass
@@ -238,7 +252,8 @@ def set_payment_in_debit_currency(entry):
 			# Convert the credit (company currency) to debit currency
 			elif credit_currency == company_currency:
 				entry['current_payment'] = entry['current_payment'] / account.exchange_rate
-			
+				entry['exchange_rate'] = account.exchange_rate
+
 			# Convert the credit currency to debit (company currency)
 			elif account.account_currency == company_currency:
 				entry['current_payment'] = entry['current_payment'] * entry["exchange_rate"]
@@ -253,6 +268,7 @@ def set_payment_in_debit_currency(entry):
 			return
 
 
+
 def set_so_details(sales_order, entry, sos, filters):
 	doc = frappe.get_doc("Sales Order", sales_order)
 	
@@ -260,6 +276,8 @@ def set_so_details(sales_order, entry, sos, filters):
 	
 	total_details = []
 	for row in doc.sales_commission:
+		if filters.get("sales_man") and filters["sales_man"] != row.sales_person: continue
+
 		details = deepcopy(entry)
 		details['sales_person'] = row.sales_person
 		details['stage_title'] = row.stage_title
