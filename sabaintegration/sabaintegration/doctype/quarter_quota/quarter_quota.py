@@ -98,8 +98,8 @@ class QuarterQuota(Document):
 					doc.save()
 					doc.reload()
 
-def check_if_team_leader(sales_man):
-	employee = get_employee(sales_man)
+def check_if_team_leader(sales_man, employee=None):
+	if not employee: employee = get_employee(sales_man)
 	if employee:
 		if employee.get("reports_to"):
 			reports_to = employee.reports_to

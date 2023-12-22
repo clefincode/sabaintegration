@@ -10,6 +10,7 @@ from sabaintegration.sabaintegration.doctype.commission_rule.commission_rule imp
 from sabaintegration.sabaintegration.doctype.quarter_quota.quarter_quota import get_employee, check_if_team_leader
 from sabaintegration.overrides.employee import get_leaders, get_employees
 #from sabaintegration.sabaintegration.report.sales_commission_details.sales_commission_details import employees_query
+from sabaintegration.sabaintegration.doctype.default_kpi.default_kpi import get_default_kpi
 
 def execute(filters=None):
 	columns = get_columns(filters)
@@ -242,7 +243,7 @@ def get_data(filters):
 				"primary_supervision_commission": flt(commissions[comm].get("primary_supervision_commission",0), 2),
 				"secondary_supervision_commission": flt(commissions[comm].get("secondary_supervision_commission",0), 2),
 				"supervision_commission": flt(commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0) , 2),
-				"kpi": commissions[comm].get('kpi', 100),
+				"kpi": commissions[comm].get('kpi'),
 				"net_commission_value": flt(commissions[comm].get('commission_value', 0) + commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0), 2),
 				"other_commission": flt(commissions[comm].get('other_commission', 0), 2),
 				"total": flt(commissions[comm].get('commission_value', 0) + commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0) +  commissions[comm].get('other_commission', 0), 2)
@@ -394,6 +395,10 @@ def calculate_commission_in_so(sales_order, sales_men_comm, achievement_commissi
 	
 	sales_men_comm[doc.primary_sales_man]['avg_comm_percent'] = sales_men_comm[doc.primary_sales_man].get('avg_comm_percent', 0) + doc.commission_percentage
 	
+	kpi_doc = False
+	if frappe.db.exists("Default KPI", {'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}):
+		kpi_doc = True
+
 	for row in doc.get("sales_commission"):
 		
 		if sales_man and sales_man != row.sales_person: continue
@@ -408,7 +413,15 @@ def calculate_commission_in_so(sales_order, sales_men_comm, achievement_commissi
 		else:
 			kpi = frappe.db.get_value('Quarter Quota', {'sales_man': row.sales_person, 'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}, 'kpi')
 			if not kpi:
-				kpi = 100
+				if kpi_doc:
+					kpi = get_default_kpi(
+						doc = 'Quarter Quota',
+						person = row.sales_person,
+						year = filters['year'],
+						quarter = filters['quarter']
+						)
+				else:
+					kpi = 100
 		if not sales_men_comm[row.sales_person].get('quota'):
 			sales_men_comm[row.sales_person]['quota'] = frappe.db.get_value('Quarter Quota', {'sales_man': row.sales_person, 'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}, 'quota')
 		

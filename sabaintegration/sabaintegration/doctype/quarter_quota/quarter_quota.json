@@ -62,7 +62,6 @@
    "options": "Company:company:default_currency"
   },
   {
-   "default": "100",
    "fieldname": "kpi",
    "fieldtype": "Percent",
    "label": "KPI"
@@ -151,7 +150,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2023-08-23 15:01:20.171231",
+ "modified": "2023-12-19 12:40:19.656871",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Quarter Quota",
