@@ -28,6 +28,7 @@ frappe.ui.form.on("Opportunity", {
         
     },
     onload(frm){
+        frm.set_df_property("title", "hidden", 1)
         if (frm.doc.items) frm.trigger("set_option");
         //for submitted option to stay read only after refresh
         for (let i=0; i<frm.all_options.length; i++){
