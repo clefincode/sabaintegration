@@ -44,7 +44,8 @@ doctype_js = {
 	"Lead": "public/js/doctype/lead.js",
 	"Attendance": "public/js/doctype/attendance.js",
 	"Purchase Order": "public/js/doctype/purchase_order.js",
-    "Expense Claim": "public/js/doctype/expense_claim.js"
+    "Expense Claim": "public/js/doctype/expense_claim.js",
+    "Payment Reconciliation": "public/js/doctype/payment_reconciliation.js"
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
@@ -116,7 +117,8 @@ override_doctype_class = {
 	'Stock Entry': 'sabaintegration.overrides.stock_entry.CustomStockEntry',
     'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
     'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder',
-    'Expense Claim': 'sabaintegration.overrides.expense_claim.CustomExpenseClaim'
+    'Expense Claim': 'sabaintegration.overrides.expense_claim.CustomExpenseClaim',
+    'Payment Reconciliation': 'sabaintegration.overrides.payment_reconciliation.CustomPaymentReconciliation'
 }
 
 # Document Events
