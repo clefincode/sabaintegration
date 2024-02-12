@@ -4,9 +4,12 @@
 import frappe
 from frappe import _
 from sabaintegration.sabaintegration.doctype.commission_rule.commission_rule import calculate_commission, get_default_rule
-from sabaintegration.sabaintegration.report.sales_commission.sales_commission import get_achievement_values
 from sabaintegration.overrides.employee import get_employees
-from sabaintegration.sabaintegration.doctype.quarter_quota.quarter_quota import get_employee, check_if_team_leader
+from sabaintegration.sabaintegration.doctype.default_kpi.default_kpi import get_default_kpi
+from sabaintegration.sabaintegration.report.quota import is_admin, get_employee, check_if_team_leader, QuotaCalculations
+
+ROLE, DOCTYPE = "0 Accounting - Sales Persons Commission Report", "Sales Person"
+default_rule = get_default_rule()
 
 def execute(filters=None):
 	data = get_data(filters)
@@ -184,14 +187,9 @@ def get_conditions(filters):
 		conditions += " and CONCAT('Q', CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0)) = %(quarter)s"
 	if filters.get("supervisior"):
 		query = ""
-		if frappe.session.user != "Administrator" and "0 Accounting - Sales Persons Commission Report" not in frappe.get_roles():
-			employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+		admin, sales_person = is_admin(frappe.session.user, ROLE, DOCTYPE)
 		
-			if not employee: return
-
-			sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-			
-			if not sales_person: return
+		if not admin and sales_person:
 
 			sales_man = employees_query(sales_person, filters["supervisior"])
 			if sales_man:
@@ -211,7 +209,7 @@ def employees_query(supervisior, sales_man = None):
 	if sales_man and sales_man == supervisior:
 		return sales_man
 
-	employee = get_employee(supervisior)
+	employee = get_employee(DOCTYPE, supervisior)
 	if not employee:
 		frappe.throw(get_msg(supervisior, "Employee"))
 	employees = get_employees(employee.name, "name", "reports_to")
@@ -232,24 +230,21 @@ def employees_query(supervisior, sales_man = None):
 			str_emps += " '{}',".format(sales_person)
 	if sales_man: 
 		return
-	return str_emps + "'{}'".format(supervisior)
+	return str_emps + " '{}'".format(supervisior)
 
 def get_data(filters):
 	conditions = get_conditions(filters)
-	employees = ""
-	if frappe.session.user != "Administrator" and "0 Accounting - Sales Persons Commission Report" not in frappe.get_roles():		
-		employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+	employees, employees_list = "", []
+	admin, sales_person = is_admin(frappe.session.user, ROLE, DOCTYPE)
 		
-		if not employee: return
-
-		sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-		
-		if not sales_person: return
-
+	if not admin and sales_person:
 		if not filters.get("sales_man"):
-			employees = "and (so.primary_sales_man in ({0}) or comm.sales_person = '{1}' ) ".format(employees_query(sales_person), sales_person)
+			emp = employees_query(sales_person)
+			employees_list = emp[2:-1].split("', '")
+			employees = "and (so.primary_sales_man in ({0}) or comm.sales_person = '{1}' ) ".format(emp, sales_person)
 		else:
 			sales_man = employees_query(sales_person, filters.get("sales_man", None))
+			employees_list = sales_man.split("', '")
 			if not sales_man: return
 
 			employees = "and comm.sales_person = '{}' ".format(sales_man)
@@ -274,11 +269,19 @@ def get_data(filters):
 	
 	sales_men_comm = {}
 
-	_, _, leaders = get_achievement_values(res)
+	q = QuotaCalculations({
+		"doctype": DOCTYPE,
+		"filters": filters,
+		"role": ROLE,
+		"user": frappe.session.user,
+		"rule": default_rule
+	})
+
+	_, _, leaders = q.get_achievement_values()
 
 	sales_person, get_supervision = None, False
 	if frappe.session.user == "Administrator" or\
-	 "0 Accounting - Sales Persons Commission Report" in frappe.get_roles():
+	 ROLE in frappe.get_roles():
 		get_supervision = True
 	
 	else:
@@ -287,14 +290,30 @@ def get_data(filters):
 		if not employee: return
 
 		sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-
+	
+	kpi_doc = False
+	if frappe.db.exists("Default KPI", {
+		"year": filters.get("year"),
+		"quarter": filters.get("quarter"),
+		"docstatus": 1
+	}):
+		kpi_doc = True
+	
 	for row in res:	
+		if not row['kpi']:
+			if kpi_doc:
+				row['kpi'] = get_default_kpi(
+						doc = 'Quarter Quota',
+						person = row.engineer,
+						year = filters['year'],
+						quarter = filters['quarter']
+					)
 		if sales_men_comm.get(row.primary_sales_man):
 			row['achieve_percent'] = sales_men_comm.get(row.primary_sales_man)
 		else: row['achieve_percent'] = get_achieve_percent(row.primary_sales_man, filters)
 		sales_men_comm[row.primary_sales_man] = row['achieve_percent']
 
-		get_leaders_supervision_values(row, leaders, filters, sales_person, get_supervision)
+		get_leaders_supervision_values(row, leaders, filters, sales_person, employees_list, get_supervision)
 
 	return res
 
@@ -305,7 +324,7 @@ def get_achieve_percent(sales_man, filters):
 
 	return frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "year": filters.get("year"), "quarter": filters.get("quarter")}, "achievement_percentage")
 
-def get_leaders_supervision_values(row, leaders, filters, sales_person, get_supervision):		
+def get_leaders_supervision_values(row, leaders, filters, sales_person, employees_list, get_supervision):		
 	secondary = True
 	
 	if leaders.get(row.primary_sales_man):
@@ -323,7 +342,7 @@ def get_leaders_supervision_values(row, leaders, filters, sales_person, get_supe
 			row['team_secondary_supervisior'] = row.primary_sales_man
 
 		elif doc.position == "Senior":
-			is_leader, _ = check_if_team_leader(row.primary_sales_man)
+			is_leader = check_if_team_leader(doc)
 			if is_leader:
 				
 				row['team_primary_supervisior'] = row.primary_sales_man
@@ -345,10 +364,10 @@ def get_leaders_supervision_values(row, leaders, filters, sales_person, get_supe
 		row['team_primary_supervisior'] = row.primary_sales_man
 		row['team_secondary_supervisior'] = row.primary_sales_man
 
-	if get_supervision or row['team_primary_supervisior'] == sales_person:	
+	if get_supervision or row['team_primary_supervisior'] == sales_person or row['team_primary_supervisior'] in employees_list:	
 		get_leader_supervision_values(row, filters, "primary")
 	if secondary:
-		if get_supervision or row['team_secondary_supervisior'] == sales_person:		
+		if get_supervision or row['team_secondary_supervisior'] == sales_person or row['team_secondary_supervisior'] in employees_list:		
 			get_leader_supervision_values(row, filters, "secondary")
 
 def get_leader_supervision_values(row, filters, level):
@@ -375,10 +394,9 @@ def get_leader_supervision_values(row, filters, level):
 
 	row["default_"+level+"_supervision"] = extra * row["sales_stage"] / 100
 	
-	default_rule = get_default_rule()
 	comm = calculate_commission(row["default_"+level+"_achievement"], default_rule)
-
-	row[level+"_supervision_commission"] = row["default_"+level+"_supervision"] * comm / 100
+	if comm:
+		row[level+"_supervision_commission"] = row["default_"+level+"_supervision"] * comm / 100
 	
 def get_leader(leaders, filters):
 	if not leaders: return

@@ -49,8 +49,9 @@ function getuser(){
 	if (user == 'Administrator') return;
 	else {
 		frappe.call({
-			method:"sabaintegration.sabaintegration.report.salesman_commission_progress.salesman_commission_progress.get_sales_man",
+			method:"sabaintegration.sabaintegration.report.quota.get_person",
 			args: {
+				user_type: "Sales Person",
 				user: user
 			},
 			callback: function(r){

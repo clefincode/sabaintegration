@@ -3,8 +3,8 @@
 
 import frappe
 from frappe import _
-from sabaintegration.sabaintegration.report.sales_commission.sales_commission import get_employee
-from sabaintegration.overrides.employee import get_leaders, get_employees
+from sabaintegration.overrides.employee import get_leaders
+from sabaintegration.sabaintegration.report.quota import get_person, get_employee
 
 def execute(filters=None):
 	columns = get_columns()
@@ -77,8 +77,8 @@ def get_data(filters):
 			employee = frappe.db.get_value("Sales Person", filters["sales_man"], "employee")
 			if employee:
 				user = frappe.db.get_value("Employee", employee, "user_id")
-		sales_men = get_sales_man(user)
-	else: sales_men = get_sales_man(frappe.session.user)
+		sales_men = get_person("Sales Person", user)
+	else: sales_men = get_person("Sales Person", frappe.session.user)
 	
 	res = frappe.db.sql("""
 		select distinct so.name as sales_order, comm.sales_person, EXTRACT(YEAR FROM so.submitting_date) as year, 
@@ -111,7 +111,7 @@ def prepare_chart_data(results, filters):
 				else:
 					values[res.sales_person] = [res.base_expected_profit_loss_value, res.total_quota]
 				
-				employee = get_employee(label)
+				employee = get_employee("Sales Person", label)
 				if not employee: continue
 
 				leaders = get_leaders(employee.name, "name", "reports_to", None)
@@ -153,36 +153,3 @@ def prepare_chart_data(results, filters):
 		"height": 300,
 	}
 
-
-@frappe.whitelist()
-def get_sales_man(user = ''):
-	if user:
-		employee = frappe.db.get_all("Employee", {"user_id": user})
-
-		if not employee: return ''
-		if employee and employee[0]:
-			employee = employee[0].name
-			sales_man = frappe.db.get_all("Sales Person", {"employee": employee}, "name")
-			if not sales_man: return ''
-			
-			employees = get_employees(employee, "name", "reports_to")
-
-			if not employees: return "'" + sales_man[0].name + "'"
-			
-			st_sales_men = ""
-			for employee in employees:
-				sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-				if not sales_person: continue
-				st_sales_men += f"'{sales_person}',"
-
-			st_sales_men += "'" + sales_man[0].name + "'"
-
-			return st_sales_men					
-
-	else:
-		sales_men = frappe.db.get_all("Sales Person", {"enabled":1}, "name")
-		st_sales_men = ''
-		if not sales_men: return ''
-		for sm in sales_men:
-			st_sales_men += f"'{sm.name}',"
-		return st_sales_men[:-1]

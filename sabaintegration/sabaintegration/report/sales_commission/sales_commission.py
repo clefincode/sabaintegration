@@ -1,16 +1,17 @@
 # Copyright (c) 2023, Ahmad and contributors
 # For license information, please see license.txt
 import json
-import datetime
 import frappe
 from frappe import _
 from frappe.utils import flt
 
 from sabaintegration.sabaintegration.doctype.commission_rule.commission_rule import calculate_commission, get_default_rule
-from sabaintegration.sabaintegration.doctype.quarter_quota.quarter_quota import get_employee, check_if_team_leader
 from sabaintegration.overrides.employee import get_leaders, get_employees
 #from sabaintegration.sabaintegration.report.sales_commission_details.sales_commission_details import employees_query
-from sabaintegration.sabaintegration.doctype.default_kpi.default_kpi import get_default_kpi
+from sabaintegration.sabaintegration.report.quota import is_admin, QuotaCalculations
+
+default_rule = get_default_rule()
+ROLE, DOCTYPE = "0 Accounting - Sales Persons Commission Report", "Sales Person"
 
 def execute(filters=None):
 	columns = get_columns(filters)
@@ -219,8 +220,15 @@ def get_data(filters):
 		if msgs:
 			frappe.msgprint("Missing records in Quarter Quota:" + msgs)
 	else:
-		commissions, msg = get_commissions(filters)
-		
+		q = QuotaCalculations({
+				"doctype": DOCTYPE,
+				"filters": filters,
+				"role": ROLE,
+				"user": frappe.session.user,
+				"rule": default_rule
+		})
+		commissions, msg = q.get_incentives()
+
 		if not commissions: return
 		
 		if filters.get("sales_man"):
@@ -229,24 +237,26 @@ def get_data(filters):
 		
 		for comm in commissions:
 			#if not commissions[comm].get('total'): continue
-
+			kpi = commissions[comm].get('kpi') or 0
+			subordinates_commission = flt(commissions[comm].get('total_achieve_value', 0 ) - commissions[comm].get('achieve_value',0), 2)
+			supervision_commission = flt(commissions[comm].get("primary_supervision_incentive",0) + commissions[comm].get("secondary_supervision_incentive",0) , 2)
 			results.append({
 				"sales_man": comm,
-				"comm_percent": flt(commissions[comm].get('avg_comm_percent', 0), 2),
+				"comm_percent": flt(commissions[comm].get('incentive_percentage', 0), 2),
 				"quota": commissions[comm]['quota'],
 				"achievement_value": flt(commissions[comm].get('achieve_value', 0), 2),
-				"subordinates_commission": flt(commissions[comm].get('total_achieve_value', 0 ) - commissions[comm].get('achieve_value',0), 2),
+				"subordinates_commission": subordinates_commission,
 				"total_achieve_value": flt(commissions[comm].get('total_achieve_value', 0 ), 2),
 				"achiever_sub_pl": flt(commissions[comm].get("achiever_sub_pl",0), 2),				"achieve_percent": flt(commissions[comm].get('achieve_percent', 0), 2),
 				"direct_sales_contribution": flt(commissions[comm].get('direct_sales_contribution', 0 ), 2),
 				"commission_value": flt(commissions[comm].get('commission_value', 0), 2),
-				"primary_supervision_commission": flt(commissions[comm].get("primary_supervision_commission",0), 2),
-				"secondary_supervision_commission": flt(commissions[comm].get("secondary_supervision_commission",0), 2),
-				"supervision_commission": flt(commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0) , 2),
-				"kpi": commissions[comm].get('kpi'),
-				"net_commission_value": flt(commissions[comm].get('commission_value', 0) + commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0), 2),
+				"primary_supervision_commission": flt(commissions[comm].get("primary_supervision_incentive",0), 2),
+				"secondary_supervision_commission": flt(commissions[comm].get("secondary_supervision_incentive",0), 2),
+				"supervision_commission": supervision_commission,
+				"kpi": kpi,
+				"net_commission_value": flt((commissions[comm].get('commission_value', 0) + supervision_commission) * kpi / 100, 2),
 				"other_commission": flt(commissions[comm].get('other_commission', 0), 2),
-				"total": flt(commissions[comm].get('commission_value', 0) + commissions[comm].get("primary_supervision_commission",0) + commissions[comm].get("secondary_supervision_commission",0) +  commissions[comm].get('other_commission', 0), 2)
+				"total": flt((commissions[comm].get('commission_value', 0) * kpi / 100) + (supervision_commission * kpi / 100) + commissions[comm].get('other_commission', 0), 2)
 			})
 
 		if msg:
@@ -254,312 +264,6 @@ def get_data(filters):
 			frappe.msgprint(msg)
 	
 	return results
-
-def get_commissions(filters):
-	"""Get the Commission Values for each sales man in a certaine quarter of a year
-	
-	Returns a dictonary of sales men with the following data:
-
-	quota: required quota of the quarter
-	achieve_value: the achievment value of the sales man on his direct SOs 
-	achieve_percent:percentage of achievment
-	total_achieve_value: the achievment value of the sales man on his direct SOs + his subordinates SOs
-	achieved_target: the percentage of the commission he will take depending on his achievement percentage
-	avg_comm_percent: the average of the commission percentage from his all SOs
-	kpi: KPI of the sales man
-	direct_sales_contribution: how much the sales man contribute in his direct SOs
-	commission_value: the commission he should get from his direct SOs
-	other_commission: the commission he should get from other SOs he contributed in
-	extra_commission: the extra commission percentage
-	primary_supervision_commission & secondary_supervision_commission: how much he will take as an extra commission from his subordinates SOs
-
-	"""
-	
-	# get achievement values for each sales man
-	if not filters.get('quarter') or not filters.get('year'): return None, None
-
-	sales_orders = get_sales_orders(filters)
-	total_achievement_values, achievement_values, leaders = get_achievement_values(sales_orders)
-	list_filters = {}
-	list_filters['year'] = filters['year']
-	list_filters['quarter'] = filters['quarter']
-	
-	# get the rule that calculate the percentage of the commission percentage
-	# that is depent on the achievement percentage for the quarter
-	default_rule = get_default_rule()
-	sales_men_comm = {}
-	msg = ""
-	for sales_man in total_achievement_values:
-		list_filters['sales_man'] = sales_man
-		
-		if not frappe.db.exists("Quarter Quota", list_filters): 
-			msg += "</br> {}".format(sales_man) 
-			continue
-
-		quarter_quota = frappe.get_doc("Quarter Quota", list_filters)
-		
-		# Calculate the achievement percentage depending on the quarter quota
-		achievemnt_percent = total_achievement_values[sales_man] / quarter_quota.total_quota * 100 if quarter_quota.total_quota else 100
-	
-		# Calculate the commission milestone percentage depending on the rule
-		comm = calculate_commission(achievemnt_percent, default_rule)
-		if not sales_men_comm.get(sales_man):
-			sales_men_comm[sales_man] = {}
-
-		sales_men_comm[sales_man]['kpi'] = quarter_quota.kpi
-		sales_men_comm[sales_man]['achieve_percent'] = achievemnt_percent
-		sales_men_comm[sales_man]['quota'] = quarter_quota.total_quota
-		sales_men_comm[sales_man]['achieve_value'] = achievement_values.get(sales_man, 0)
-		sales_men_comm[sales_man]['total_achieve_value'] = total_achievement_values[sales_man]
-		sales_men_comm[sales_man]['achieved_target'] = comm
-		sales_men_comm[sales_man]['leaders'] = leaders.get(sales_man, [])
-
-		if not comm: continue
-		
-		sales_orders = get_sales_orders(filters, sales_man)
-		# Calculate commissions from all sales order of the quarter
-		for so in sales_orders:
-			calculate_commission_in_so(so.sales_order, sales_men_comm, comm, list_filters)
-
-		if len(sales_orders):
-			sales_men_comm[sales_man]['avg_comm_percent'] = sales_men_comm[sales_man].get('avg_comm_percent',0) / len(sales_orders)
-		else:
-			sales_men_comm[sales_man]['avg_comm_percent'] = quarter_quota.commission_percentage
-		#sales_men_comm[sales_man]['default_achieving_percent'] = total_achievement_values[sales_man] * sales_men_comm[sales_man]['avg_comm_percent'] / 100
-		#sales_men_comm[sales_man]['total_achieve_value'] = total_achievement_values[sales_man]
-
-	# msg is all of the sales men who don't have quarter quota
-	set_leaders_extra(sales_men_comm, filters)
-	sales_men_comm = get_permitted_rows(sales_men_comm)
-	return sales_men_comm, msg
-
-def get_achievement_values(sales_orders):
-	total_achievement_values, achievement_values, emp_leaders = {}, {}, {}
-	checked_sos = []
-	for so in sales_orders:
-		if not so.primary_sales_man:
-			frappe.throw("Sales Order: {} doesn't have a primary sales man for it".format(so.sales_order))
-
-		if so.sales_order in checked_sos: continue
-		checked_sos.append(so.sales_order)
-
-
-		achievement_values[so.primary_sales_man] = achievement_values.get(so.primary_sales_man, 0) + so.base_expected_profit_loss_value
-		total_achievement_values[so.primary_sales_man] = total_achievement_values.get(so.primary_sales_man,0) + so.base_expected_profit_loss_value
-
-		employee = get_employee(so.primary_sales_man)
-		if not employee:
-			frappe.msgprint("Sales Person {} is not Linked to any Employee Record".format(so.primary_sales_man))
-		
-		else: 
-			leaders = get_leaders(employee.name, "name", "reports_to", None)
-
-			if leaders:
-				for leader in leaders:
-					leader_doc = frappe.get_doc("Employee", leader)
-					if check_if_leader(leader_doc):
-						sales_person = frappe.db.get_value("Sales Person", {"employee": leader}, "name")
-						
-						if not emp_leaders.get(so.primary_sales_man):
-							emp_leaders[so.primary_sales_man] = [sales_person]
-						elif sales_person not in emp_leaders[so.primary_sales_man]:
-							emp_leaders[so.primary_sales_man].append(sales_person)
-
-						if not sales_person: continue
-
-						total_achievement_values[sales_person] = total_achievement_values.get(sales_person, 0) + so.base_expected_profit_loss_value
-	
-	return total_achievement_values, achievement_values, emp_leaders
-
-def get_sales_orders(filters, sales_man = None):
-	conditions = get_conditions(filters)
-	
-	strQuery= """
-		select so.name as sales_order, so.base_expected_profit_loss_value as base_expected_profit_loss_value, so.primary_sales_man as primary_sales_man
-		from `tabSales Order` as so
-		where so.submitting_date != '' and so.submitting_date is not null and so.docstatus = 1
-		and so.primary_sales_man != '' and so.primary_sales_man is not null
-		and so.base_expected_profit_loss_value > 0
-		{conditions}
-		""".format(conditions = conditions)
-	if sales_man:
-		strQuery += " and so.primary_sales_man = '{primary_sales_man}'".format(primary_sales_man = sales_man)
-	
-	return frappe.db.sql(strQuery, filters, as_dict = 1)
-
-def calculate_commission_in_so(sales_order, sales_men_comm, achievement_commission, filters, sales_man = None):
-	
-	doc = frappe.get_doc("Sales Order", sales_order)
-	
-	profit_loss_value = doc.base_expected_profit_loss_value * achievement_commission / 100 * doc.commission_percentage / 100
-	
-	sales_men_comm[doc.primary_sales_man]['avg_comm_percent'] = sales_men_comm[doc.primary_sales_man].get('avg_comm_percent', 0) + doc.commission_percentage
-	
-	kpi_doc = False
-	if frappe.db.exists("Default KPI", {'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}):
-		kpi_doc = True
-
-	for row in doc.get("sales_commission"):
-		
-		if sales_man and sales_man != row.sales_person: continue
-		
-		new_comm = profit_loss_value * (row.comm_percent / 100)
-		
-		if not sales_men_comm.get(row.sales_person):
-			sales_men_comm[row.sales_person] = {}
-
-		if sales_men_comm[row.sales_person].get('kpi'):
-			kpi = sales_men_comm[row.sales_person]['kpi']
-		else:
-			kpi = frappe.db.get_value('Quarter Quota', {'sales_man': row.sales_person, 'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}, 'kpi')
-			if not kpi:
-				if kpi_doc:
-					kpi = get_default_kpi(
-						doc = 'Quarter Quota',
-						person = row.sales_person,
-						year = filters['year'],
-						quarter = filters['quarter']
-						)
-				else:
-					kpi = 100
-		if not sales_men_comm[row.sales_person].get('quota'):
-			sales_men_comm[row.sales_person]['quota'] = frappe.db.get_value('Quarter Quota', {'sales_man': row.sales_person, 'quarter': filters['quarter'], 'year': filters['year'], 'docstatus': 1}, 'quota')
-		
-		
-		if row.sales_person == doc.primary_sales_man:
-			sales_men_comm[row.sales_person]['direct_sales_contribution'] = sales_men_comm.get(row.sales_person).get('direct_sales_contribution', 0) + doc.base_expected_profit_loss_value * (row.comm_percent / 100)
-			sales_men_comm[row.sales_person]['commission_value'] = sales_men_comm.get(row.sales_person).get('commission_value', 0) + new_comm
-		else:
-			sales_men_comm[row.sales_person]['other_commission'] = sales_men_comm[row.sales_person].get('other_commission', 0) + new_comm * kpi / 100
-		
-def set_leaders_extra(sales_men_comm, filters):
-	conditions = get_conditions(filters)
-
-	for sales_man in sales_men_comm:
-		comm = sales_men_comm[sales_man].get('achieved_target', 0) or 0
-		if  comm <= 0: continue
-		res = frappe.db.sql("""
-			 select name, base_expected_profit_loss_value as total, prm_sup_percentage, sec_sup_percentage
-			 from `tabSales Order` as so
-			 where primary_sales_man = '{sales_man}' 
-			 and docstatus = 1 and so.base_expected_profit_loss_value > 0
-			 {conditions}
-			""".format(sales_man = sales_man, conditions = conditions), filters, as_dict = 1)
-		
-		if not res or len(res[0])<= 0: continue
-
-		for so in res:			
-			own_level = set_extra_on_direct_so(sales_men_comm, sales_man, so)
-
-			if own_level == "primary": set_extra_on_indirect_so(sales_men_comm, sales_man, so, "secondary")
-			else: set_extra_on_indirect_so(sales_men_comm, sales_man, so)
-
-
-def set_extra_on_direct_so(sales_men_comm, sales_man, sales_order):
-	employee = get_employee(sales_man)
-
-	if not check_if_leader(employee): return
-
-	prm_extra = sales_order.prm_sup_percentage or 1.5
-
-	comm = sales_men_comm[sales_man].get('achieved_target', 0)
-
-	if comm:
-		sales_men_comm[sales_man]['primary_supervision_commission'] = sales_men_comm[sales_man].get('primary_supervision_commission', 0) + (sales_order.total * prm_extra / 100 * comm / 100)
-		return "primary"
-	
-def set_extra_on_indirect_so(sales_men_comm, sales_man, sales_order, leader_level = None):
-	employee = get_employee(sales_man)
-	set_employee = False
-	if sales_men_comm[sales_man].get("leaders"):
-		leaders = sales_men_comm[sales_man]["leaders"]
-		set_employee = True
-	else:
-		leaders = get_leaders(employee.name, "name", "reports_to", None)
-
-	own_so = False
-
-	if not leaders: 
-		leaders = [employee.name]
-		leader_level = "secondary"
-		own_so = True
-
-	if leader_level == "secondary":
-		level = 'secondary'
-		extra = sales_order.sec_sup_percentage or 0.75
-
-	else:
-		level = 'primary'
-		extra = sales_order.prm_sup_percentage or 1.5
-
-
-	for leader in leaders:
-		
-		if set_employee:
-			leader_doc = get_employee(leader)
-			if leader_doc:
-				leader = leader_doc.name
-			else: frappe.throw("There is no Employee record for sales man: "+ leader)
-		leader = frappe.get_doc("Employee", leader)
-
-		if not check_if_leader(leader) : return
-
-		sales_person = frappe.db.get_value("Sales Person", {"employee": leader.name}, "name")
-		
-		if not sales_person or not sales_person in sales_men_comm: return
-		
-		comm = sales_men_comm[sales_person].get('achieved_target', 0)
-
-		if comm:			
-			sales_men_comm[sales_person][level+'_supervision_commission'] = sales_men_comm[sales_person].get(level+'_supervision_commission', 0) + sales_order.total * extra / 100 * comm / 100
-
-			if not own_so:
-				sales_men_comm[sales_person]["achiever_sub_pl"] = sales_men_comm[sales_person].get("achiever_sub_pl", 0) + sales_order.total
-		
-		if level == "secondary":
-			return
-		else:
-			level = "secondary"
-			extra = sales_order.sec_sup_percentage or 0.75
-
-def check_if_leader(employee):
-	if employee.position != "Senior" and\
-		employee.position != "Team Leader" and\
-		employee.position != "Manager" : 
-		return False
-	
-	if employee.position == "Senior":
-		sales_person = frappe.db.get_value("Sales Person", {"employee": employee.name}, "name")
-		if sales_person:
-			is_leader, _ = check_if_team_leader(sales_person)
-			if not is_leader: return
-		else: return False
-	return True
-
-def get_permitted_rows(sales_men_comm):
-	if frappe.session.user != "Administrator" and "0 Accounting - Sales Persons Commission Report" not in frappe.get_roles():		
-		employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
-		
-		if not employee: return
-
-		sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-		
-		if not sales_person: return
-
-		dict_sm = {}
-		
-		if sales_men_comm.get(sales_person):
-			dict_sm = {sales_person : sales_men_comm[sales_person]}
-		employees = get_employees(employee, "name", "reports_to")
-		if not employees: return dict_sm
-		for emp in employees:
-			sp = frappe.db.get_value("Sales Person", {"employee": emp}, "name")
-			if not sp or not sales_men_comm.get(sp): continue
-			
-			dict_sm[sp] = sales_men_comm[sp]
-		return dict_sm
-	
-	else: return sales_men_comm
 
 def get_annual_commission(filters):
 	"Get the Additional Annual Commission"
@@ -571,7 +275,14 @@ def get_annual_commission(filters):
 		filters['quarter'] = q
 
 		# Get the commission and the achievement for the sales men during the quarter
-		commissions = get_commissions(filters)[0]
+		q = QuotaCalculations({
+		"doctype": DOCTYPE,
+		"filters": filters,
+		"role": ROLE,
+		"user": frappe.session.user,
+		"rule": default_rule
+		})
+		commissions, msg = q.get_incentives()
 		for sales_man in commissions:
 			total, kpi, msg = get_quarter_quota(sales_man, filters.get("year"), q)
 			if annual_commission.get(sales_man):
@@ -622,7 +333,14 @@ def apply_comm_on_so(args):
 	if not args.get("year") or not args.get("quarter"):
 		frappe.throw("Select Year and Quarter to Apply Commissions")
 
-	commissions, msg = get_commissions(args)
+	q = QuotaCalculations({
+		"doctype": DOCTYPE,
+		"filters": args,
+		"role": ROLE,
+		"user": frappe.session.user,
+		"rule": default_rule
+	})
+	commissions, msg = q.get_incentives()
 	if msg:
 		msg = "The following Sales men don't have a Quarter Quota record for the current Quarter: " + msg
 		frappe.throw(msg)
@@ -656,7 +374,6 @@ def apply_comm_on_so(args):
 		""".format(conditions = conditions, sales_men = sales_men)
 		sales_orders = frappe.db.sql(strQuery, args, as_dict = 1)
 		so_number = 0
-		default_rule = get_default_rule()
 		for sales_order in sales_orders:
 			doc = frappe.get_doc("Sales Order", sales_order.name)
 

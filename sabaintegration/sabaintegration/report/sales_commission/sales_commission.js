@@ -25,20 +25,20 @@ frappe.query_reports["Sales Commission"] = {
             "default": moment().year(),
 			"reqd": 1
 		},
-		{
-			"fieldname":"annual",
-			"label": ("Annual?"),
-			"fieldtype": "Check",
-			onchange: function() {
-                if (this.value) {
-                    frappe.query_report_filters_by_name.quarter.df.reqd = false;
-                } else {
-                    frappe.query_report_filters_by_name.quarter.df.reqd = true;
-                }
-                // Refresh the report page to reflect the changes.
-                frappe.query_report.refresh();
-            }
-		},
+		// {
+		// 	"fieldname":"annual",
+		// 	"label": ("Annual?"),
+		// 	"fieldtype": "Check",
+		// 	onchange: function() {
+        //         if (this.value) {
+        //             frappe.query_report_filters_by_name.quarter.df.reqd = false;
+        //         } else {
+        //             frappe.query_report_filters_by_name.quarter.df.reqd = true;
+        //         }
+        //         // Refresh the report page to reflect the changes.
+        //         frappe.query_report.refresh();
+        //     }
+		// },
 	],
 	onload: function(report) {
 		report.page.add_inner_button(__('Apply Commissions on Sales Order'), function() {
