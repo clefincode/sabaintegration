@@ -1,0 +1,37 @@
+{
+ "chart_name": "Product Manager Progress",
+ "chart_type": "Report",
+ "creation": "2024-01-29 10:58:34.707505",
+ "docstatus": 0,
+ "doctype": "Dashboard Chart",
+ "dynamic_filters_json": "{}",
+ "filters_json": "{\"year\":2024}",
+ "group_by_type": "Count",
+ "idx": 0,
+ "is_public": 0,
+ "is_standard": 1,
+ "modified": "2024-01-29 10:58:34.707505",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Product Manager Progress",
+ "number_of_groups": 0,
+ "owner": "Administrator",
+ "report_name": "Product Manager Progress",
+ "roles": [],
+ "time_interval": "Yearly",
+ "timeseries": 0,
+ "timespan": "Last Year",
+ "type": "Bar",
+ "use_report_chart": 0,
+ "x_field": "brand",
+ "y_axis": [
+  {
+   "color": "#29CD42",
+   "y_field": "achievement_value"
+  },
+  {
+   "color": "#449CF0",
+   "y_field": "total_quota"
+  }
+ ]
+}
