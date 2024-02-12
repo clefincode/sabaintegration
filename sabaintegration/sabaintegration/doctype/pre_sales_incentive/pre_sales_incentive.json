@@ -1,0 +1,97 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2023-12-12 11:45:33.278548",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "engineer",
+  "contribution_percentage",
+  "incentive_rule",
+  "section_break_5",
+  "incentive_value",
+  "net_incentive_value",
+  "column_break_8",
+  "base_incentive_value",
+  "base_net_incentive_value"
+ ],
+ "fields": [
+  {
+   "allow_on_submit": 1,
+   "default": "Pre-Sales Activity Engineer",
+   "fieldname": "engineer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Engineer",
+   "options": "Pre-Sales Engineer",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "contribution_percentage",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Contribution Percentage"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "incentive_rule",
+   "fieldtype": "Link",
+   "label": "Incentive Rule",
+   "options": "Pre-Sales Incentive Rule"
+  },
+  {
+   "fieldname": "section_break_5",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "incentive_value",
+   "fieldtype": "Currency",
+   "label": "Incentive Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "net_incentive_value",
+   "fieldtype": "Currency",
+   "label": "NET Incentive Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_8",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "base_incentive_value",
+   "fieldtype": "Currency",
+   "label": "Incentive Value (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "base_net_incentive_value",
+   "fieldtype": "Currency",
+   "label": "NET Incentive Value (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-01-12 15:37:39.212973",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Pre-Sales Incentive",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
