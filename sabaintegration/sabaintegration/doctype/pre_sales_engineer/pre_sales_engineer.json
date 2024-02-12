@@ -1,0 +1,125 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:engineer",
+ "creation": "2023-12-11 09:41:56.003538",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "name_and_employee_id_section",
+  "engineer",
+  "incentive_rate",
+  "enabled",
+  "column_break_3",
+  "employee",
+  "department",
+  "position"
+ ],
+ "fields": [
+  {
+   "fieldname": "engineer",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee",
+   "options": "Employee"
+  },
+  {
+   "fetch_from": "employee.department",
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department",
+   "options": "Department"
+  },
+  {
+   "fieldname": "position",
+   "fieldtype": "Data",
+   "label": "Level",
+   "read_only": 1
+  },
+  {
+   "fieldname": "name_and_employee_id_section",
+   "fieldtype": "Section Break",
+   "label": "Name and Employee ID",
+   "options": "icon-user"
+  },
+  {
+   "fieldname": "incentive_rate",
+   "fieldtype": "Percent",
+   "label": "Incentive Rate",
+   "precision": "3"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2024-01-14 13:06:58.961541",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Pre-Sales Engineer",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "0 Selling - Pre-Sales Engieer Creation",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "0 Selling - Pre-Sales Engineer Admin",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "0 Selling - Pre-Sales Engineer Viewing",
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
