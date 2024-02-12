@@ -5,12 +5,22 @@ import frappe
 from frappe.model.document import Document
 
 from sabaintegration.overrides.employee import get_employees, get_leaders
+from sabaintegration.sabaintegration.report.quota import check_if_team_leader, get_employee
 
 class QuarterQuota(Document):
+	def __init__(self, *args, **kwargs):
+		super(QuarterQuota, self).__init__(*args, **kwargs)
+		self.employee_doc = None
+		if self.sales_man:
+			self.employee_doc = get_employee("Sales Person", self.sales_man)
+
 	def validate(self):
 		if frappe.db.exists("Quarter Quota", {"name": ("!=", self.name), "sales_man": self.sales_man, "year": self.year, "quarter": self.quarter, "docstatus": ("!=", 2)}):
 			frappe.throw("You've already had a quarter quota for the same sales man in the same year and quarter")
 		
+		if not self.get("employee_doc"):
+			self.employee_doc = get_employee("Sales Person", self.sales_man)
+
 		self.set_position()
 		self.set_commission_values()
 			
@@ -21,39 +31,37 @@ class QuarterQuota(Document):
 		self.set_leader_commission_values()
 
 	def on_update_after_submit(self):
-		is_leader, leader_id = check_if_team_leader(self.sales_man)
-		self.set_total_quota(is_leader, leader_id)
+		is_leader = check_if_team_leader(self.employee_doc)
+		self.set_total_quota(is_leader, self.employee_doc.name)
 		self.set_leader_commission_values()
 		frappe.db.set_value("Quarter Quota", self.name, "total_quota", self.total_quota)
 
 	def set_position(self):
-		employee = get_employee(self.sales_man)
-		if employee:
-			self.position = employee.position
+		if self.employee_doc:
+			self.position = self.employee_doc.position
 
 	def set_commission_values(self):
-		is_leader, leader_id = self.check_position()
-		self.set_total_quota(is_leader, leader_id)
+		is_leader = self.check_position()
+		self.set_total_quota(is_leader, self.employee_doc.name)
 
 	def check_position(self):	
 		position = self.position
-		leader_id = ""
 		if self.position == "Senior":
-			is_leader, leader_id = check_if_team_leader(self.sales_man)
+			is_leader = check_if_team_leader(self.employee_doc)
 			if is_leader: position = "Team Leader"
 
-		if position != "Team Leader" and position != "Manager": return False, None
+		if position != "Team Leader" and position != "Manager": return False
 
-		return True, leader_id
+		return True
 
 	def set_total_quota(self, is_leader=True, leader_id = ""):
 		self.total_quota = self.quota or 0
 		if not is_leader: return
 		if not leader_id:
-			employee = get_employee(self.sales_man)
-			if not employee: return
-			leader_id = employee.name
-		
+			if not self.employee_doc:
+				self.employee_doc = get_employee("Sales Person", self.sales_man)
+				if  not self.employee_doc: return
+			leader_id = self.employee_doc.name
 		team = get_employees(leader_id, "name", "reports_to")
 
 		if not team: return
@@ -82,9 +90,8 @@ class QuarterQuota(Document):
 			doc_before_save.position == self.position:
 				return
 
-		employee = get_employee(self.sales_man)
-		if employee:
-			leaders = get_leaders(employee.name, "name", "reports_to")
+		if self.employee_doc:
+			leaders = get_leaders(self.employee_doc.name, "name", "reports_to")
 
 			if not leaders: return
 
@@ -97,24 +104,3 @@ class QuarterQuota(Document):
 					doc.set_total_quota()
 					doc.save()
 					doc.reload()
-
-def check_if_team_leader(sales_man, employee=None):
-	if not employee: employee = get_employee(sales_man)
-	if employee:
-		if employee.get("reports_to"):
-			reports_to = employee.reports_to
-			position = frappe.db.get_value("Employee", reports_to, "position")
-			if position and position == "Manager":
-				return True, employee.name
-		if employee.position == "Manager" or employee.position == "Team Leader":
-			return True, employee.name
-
-	return False, None
-		
-		
-
-def get_employee(sales_man):
-	employee = frappe.db.get_all("Sales Person", {"name": sales_man}, "employee")
-	if employee and employee[0].employee:
-		return frappe.get_doc("Employee", employee[0].employee)
-	return

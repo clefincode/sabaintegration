@@ -18,6 +18,9 @@
   "default_values_section",
   "commission_percentage",
   "kpi",
+  "column_break_12",
+  "primary_commission_percentage",
+  "secondary_commission_percentage",
   "section_break_13",
   "quota",
   "column_break_15",
@@ -145,12 +148,32 @@
    "fieldtype": "Percent",
    "hidden": 1,
    "label": "Achievement Percentage"
+  },
+  {
+   "fieldname": "column_break_12",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1.5",
+   "depends_on": "eval:doc.position == \"Team Leader\" || doc.position == \"Manager\" || doc.position == \"Senior\"",
+   "fieldname": "primary_commission_percentage",
+   "fieldtype": "Percent",
+   "label": "Primary Commission Percentage",
+   "precision": "3"
+  },
+  {
+   "default": "0.75",
+   "depends_on": "eval:doc.position == \"Manager\"",
+   "fieldname": "secondary_commission_percentage",
+   "fieldtype": "Percent",
+   "label": "Secondary Commission Percentage",
+   "precision": "3"
   }
  ],
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2023-12-19 12:40:19.656871",
+ "modified": "2024-02-08 09:33:24.325178",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Quarter Quota",
