@@ -21,10 +21,24 @@ frappe.ui.form.on("Sales Order", {
 				query: "sabaintegration.overrides.sales_order.get_sales_person",
 			};
 		});
+		frm.set_query("engineer", "pre_sales_activities", function() {
+			return {
+				query: "sabaintegration.overrides.sales_order.get_engineer",
+			};
+		});
 	},
 	items_on_form_rendered: function(){
 		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com', 'm.anas@saba-eg.com', 'nesma@saba-eg.com'].includes(frappe.session.user))
 			cur_frm.cur_grid.set_field_property('rate_without_profit_margin', 'read_only', 0)
+	},
+	brands_on_form_rendered: function(frm){
+		var brands = frm.get_field('brands');
+        if(brands && brands.grid) {
+            $.each(brands.grid.fields_map, function(fieldname, field) {
+				if (fieldname != "incentive_percentage")
+					cur_frm.cur_grid.set_field_property(fieldname, 'read_only', 1)
+            });
+        }
 	},
 	refresh: function(frm){
 		frm.set_df_property("expected_profit_loss", "read_only", 1);
@@ -175,14 +189,20 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 		], this.frm.doc.currency, "costs");
 
 		this.frm.set_currency_labels([
-			"base_cosmmission_value", "base_net_commission_value"
+			"base_commission_value", "base_net_commission_value"
 		], company_currency, "sales_commission");
 
 		this.frm.set_currency_labels([
 			"commission_value", "net_commission_value"
 		], this.frm.doc.currency, "sales_commission");
 
+		this.frm.set_currency_labels([
+			"base_incentive_value", "base_net_incentive_value"
+		], company_currency, "pre_sales_activities");
 
+		this.frm.set_currency_labels([
+			"incentive_value", "net_incentive_value"
+		], this.frm.doc.currency, "pre_sales_activities");
 	}
 	additional_discount_percentage() {
 		this.frm.cscript.calculate_taxes_and_totals();
@@ -313,8 +333,11 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 			"args": {"sales_man": me.frm.doc.primary_sales_man},
 			callback: function(r){
 				if (r.message){
-					me.frm.doc.commission_percentage = r.message;
-					me.frm.refresh_field("commission_percentage");
+					for (const field in r.message){
+						me.frm.doc[field] = r.message[field];
+						me.frm.refresh_field(field); 
+					}
+					
 				}
 			}
 		})
@@ -330,6 +353,24 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 				callback: function(r) {
 					if(!r.exc) {
 						me.frm.set_value("sales_commission", r.message);
+						
+					}
+				}
+			});
+		}
+	}
+
+	pre_sales_incentive_template(){
+		var me = this;
+		if(this.frm.doc.pre_sales_incentive_template) {
+			return this.frm.call({
+				method: "sabaintegration.overrides.sales_order.get_pre_sales_activities",
+				args: {
+					"pre_sales_incentive_template": this.frm.doc.pre_sales_incentive_template
+				},
+				callback: function(r) {
+					if(!r.exc) {
+						me.frm.set_value("pre_sales_activities", r.message);
 						
 					}
 				}
@@ -454,7 +495,7 @@ frappe.ui.form.on('Sales Commission', {
 	},
 	sales_person: function(frm, cdt, cdn){
 		let d = locals[cdt][cdn];
-		get_default_rule(d);
+		get_default_rule(d, "commission");
 	},
 	stage_title: function(frm, cdt, cdn){
         let d = locals[cdt][cdn];
@@ -474,13 +515,25 @@ frappe.ui.form.on('Sales Commission', {
     },	
 })
 
-const get_default_rule = function(row){
+frappe.ui.form.on('Pre-Sales Incentive', {
+	engineer: function(frm, cdt, cdn){
+		let d = locals[cdt][cdn];
+		get_default_rule(d, "pre_sales");
+	},
+})
+
+const get_default_rule = function(row, reason){
 	frappe.call({
 		method: "sabaintegration.sabaintegration.doctype.commission_rule.commission_rule.get_default_rule",
+		args: {
+			"reason": reason
+		},
 		callback: function(r){
 			if (r.message){
 				row.rule = r.message;
-				cur_frm.refresh_field("sales_commission");
+				
+				if (reason == "commission") cur_frm.refresh_field("sales_commission");
+				else if (reason == "pre_sales") cur_frm.refresh_field("pre_sales_activities");
 			}
 		}
 		

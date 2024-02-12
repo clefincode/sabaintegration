@@ -11,6 +11,8 @@ from erpnext.stock.doctype.item.item import get_item_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from erpnext.selling.doctype.sales_order.sales_order import SalesOrder, make_project
 
+from sabaintegration.sabaintegration.doctype.sales_order_payment.sales_order_payment import get_quarter
+
 class CustomSalesOrder(SalesOrder):
     def validate(self):
         super(CustomSalesOrder, self).validate()
@@ -18,6 +20,8 @@ class CustomSalesOrder(SalesOrder):
         self.update_costs()
         self.validate_commission()
         self.validate_sales_commission()
+        self.validate_pre_sales_activities()
+        self.set_brands()
         if self.get("_action") and self._action == 'submit':
             self.set_submitting_date()
         if self.get("_action") and self._action != 'update_after_submit':
@@ -27,6 +31,7 @@ class CustomSalesOrder(SalesOrder):
     def before_update_after_submit(self):
         super(CustomSalesOrder, self).before_update_after_submit()
         self.validate_sales_commission()
+        self.validate_pre_sales_activities()
         
     def on_update_after_submit(self):
         self.update_total_margin()
@@ -76,12 +81,25 @@ class CustomSalesOrder(SalesOrder):
         frappe.msgprint("A new project <a href='/app/project/{project}'><b>{project}</b></a> has been created".format(project = project.name))
     
     def validate_commission(self):
-        if not self.commission_percentage and self.primary_sales_man:
-            comm = get_commission_percent(self.primary_sales_man)
-            if not comm:
-                comm = 5
-            self.commission_percentage = comm
-    
+        """Set Commission Details if There is an Assigned Sales Man for the SO
+        and if There is a Missing Details"""
+        if (not self.commission_percentage \
+            or not self.primary_supervisor or not self.prm_sup_percentage or \
+            not self.secondary_supervisor or not self.sec_sup_percentage) and \
+            self.primary_sales_man:
+            values = get_commission_percent(self.primary_sales_man)
+
+            if not self.commission_percentage:
+                self.commission_percentage = values["commission_percentage"]
+            if not self.primary_supervisor:
+                self.primary_supervisor = values["primary_supervisor"]
+            if not self.secondary_supervisor:
+                self.secondary_supervisor = values["secondary_supervisior"]
+            if not self.prm_sup_percentage:
+                self.prm_sup_percentage = values["prm_sup_percentage"]
+            if not self.sec_sup_percentage == values["sec_sup_percentage"]:
+                self.sec_sup_percentage = values["sec_sup_percentage"]
+
     def validate_sales_commission(self):
         if not self.primary_sales_man and not self.sales_commission:
             return
@@ -95,12 +113,85 @@ class CustomSalesOrder(SalesOrder):
         if commission_percentage_total != 100:
             frappe.throw("The Total of Commission Percentages in Sales Commission is not equal to 100%")
 
+    def validate_pre_sales_activities(self):
+        "The Total of the Pre-Sales Activities Table Contribution Percentages has to Equal 100%"
+        if not self.pre_sales_activities:
+            return
+
+        incentive_percentage_total = 0
+        for row in self.pre_sales_activities:
+            incentive_percentage_total += row.contribution_percentage
+        if incentive_percentage_total != 100:
+            frappe.throw("The Total of Contribution Percentages in Pre-Sales Activities is not equal to 100%")
+
     def set_submitting_date(self):
         if not self.amended_from:
             self.submitting_date = now()
         elif frappe.db.exists("Sales Order", self.amended_from):
             submitting_date = frappe.db.get_value("Sales Order", self.amended_from, "submitting_date")
             if submitting_date: self.submitting_date = submitting_date
+
+    def set_brands(self):
+        "Set The Brands Table"
+
+        # Get the Year and the Quarter of Today
+        toset = True
+        today_date = datetime.now()
+        today_qq = (today_date.month, today_date.year)
+
+        # If The Doc is not New, Then Compare it with the Previous State
+        if self.get_doc_before_save():
+            # Get the Previous Modifiation Year and Quarter
+            modified_dt = self.get_doc_before_save().modified
+            before_save_qq = (modified_dt.month, modified_dt.year)
+            
+            # If the Year and The Quarter between Today and The Previous State are Equals
+            # Then Check if the Table Needs to be Updated
+            if before_save_qq == today_qq and \
+            self.get_doc_before_save().conversion_rate == self.conversion_rate and \
+            self.get_doc_before_save().currency == self.currency:
+                items_before_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.get_doc_before_save().items]
+                items_after_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.items]
+                if items_before_save == items_after_save:
+                    toset = False
+        
+        if not toset: return
+
+        self.brands, brands = [], {}
+        # Get the Brands Set
+        for item in self.items:
+            brand = frappe.db.get_value("Item", item.item_code, "brand")
+            if not brand: brand = "Unknown"
+            if not brands.get(brand):
+                brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
+            else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
+        
+        quarter = "Q" + str(get_quarter(today_qq[0]))
+        if frappe.db.exists("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1}):
+            # Assign Each Brand with its Product Manager
+            qq = frappe.get_doc("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1})   
+            for brand in brands:
+                found = False
+                for row in qq.brands:
+                    if brand == row.brand:
+                        self.append("brands", frappe._dict({
+                            "product_manager": row.product_manager,
+                            "brand": brand,
+                            "kpi": row.kpi,
+                            "incentive_percentage": row.incentive_percentage,
+                            # "selling_amount": brands[brand][0],
+                            # "selling_amount_in_order_currency": brands[brand][2],
+                            "total_quota": brands[brand][1],
+                            "total_quota_in_order_currency": brands[brand][3]
+                        }))
+                        found = True
+                        qq.brands.remove(row)
+                        break
+                
+                if not found:
+                    frappe.msgprint("Be Careful! Brand <b>{}</b> has no an associated Product Manager for it. So it's not added to the Marketing Table". format(brand))
+        else:
+            frappe.msgprint("Be Careful! Marketing Table can't be updated because there is no submitted Marketing Quarter Quota for the current Quarter")
 
 @frappe.whitelist()
 def make_bdn(sales_order, parents_items):
@@ -258,8 +349,34 @@ def get_commission(commission_template):
 
     return template_list
 
+def get_primary_sales_man_leaders(sales_man):
+    "Get The Primary and The Secondary Supervisors of The Primary Sales Man"
+    from sabaintegration.sabaintegration.report.quota import get_employee, check_if_leader
+    from sabaintegration.overrides.employee import get_leaders
+    leaders = []
+    employee = get_employee("Sales Person", sales_man)
+    if check_if_leader(employee, "Sales Person"):
+        if employee.position == "Manager":
+            leaders.extend([sales_man, sales_man])
+        else:
+            leadersList = get_leaders(employee.name, "name", "reports_to")
+
+            if leadersList:
+              sales_leader = frappe.db.get_value("Sales Person", {"employee": leadersList[0]}, "name")
+              leaders.extend([sales_man, sales_leader])  
+    else: 
+        leadersList = get_leaders(employee.name, "name", "reports_to")
+        if leadersList:
+            sales_leader_1 = frappe.db.get_value("Sales Person", {"employee": leadersList[0]}, "name")
+            sales_leader_2 = frappe.db.get_value("Sales Person", {"employee": leadersList[1]}, "name")
+              
+            leaders.extend([sales_leader_1, sales_leader_2])
+           
+    return leaders
+
 @frappe.whitelist()
 def get_commission_percent(sales_man):
+    "Get the Commission Percentages"
     if not sales_man: return
     from datetime import datetime
 
@@ -273,16 +390,87 @@ def get_commission_percent(sales_man):
     quarter = (month - 1) // 3 + 1
     
     if not quarter: return
-    
-    commission_percentage = frappe.db.get_value("Quarter Quota", {"sales_man": sales_man, "quarter": "Q"+ str(quarter), "year": year, "docstatus": 1}, "commission_percentage")
 
-    if commission_percentage: return commission_percentage
+    leaders = get_primary_sales_man_leaders(sales_man)
+
+    commission_percentage = frappe.db.get_value("Quarter Quota", {
+        "sales_man": sales_man, 
+        "quarter": "Q"+ str(quarter), 
+        "year": year, 
+        "docstatus": 1}, "commission_percentage") or 5
+
+    primary_commission = frappe.db.get_value("Quarter Quota", {
+        "sales_man": leaders[0], 
+        "quarter": "Q"+ str(quarter), 
+        "year": year, 
+        "docstatus": 1}, "primary_commission_percentage") or 1.5
+
+    secondary_commission = frappe.db.get_value("Quarter Quota", {
+        "sales_man": leaders[1], 
+        "quarter": "Q"+ str(quarter), 
+        "year": year, 
+        "docstatus": 1}, "secondary_commission_percentage") or 0.75
+
+    return {"commission_percentage": commission_percentage, 
+            "primary_supervisor": leaders[0],
+            "secondary_supervisor": leaders[1],
+            "prm_sup_percentage": primary_commission,
+            "sec_sup_percentage": secondary_commission}
+
+@frappe.whitelist()
+def get_incentive_percent(engineer):
+    "Get the Incentive Percentagr of an Engineer in The Current Quarter"
+    if not engineer: return
+    from datetime import datetime
+
+    # Get the current date
+    now_date = frappe.utils.nowdate()
+
+    # Convert it to a datetime object
+    today_date = datetime.strptime(now_date, '%Y-%m-%d')
+    month = today_date.month
+    year = today_date.year
+    quarter = (month - 1) // 3 + 1
+    
+    if not quarter: return
+
+    incentive_percentage = frappe.db.get_value("Pre-Sales Quarter Quota", {"engineer": engineer, "quarter": "Q"+ str(quarter), "year": year, "docstatus": 1}, "incentive_percentage")
+
+    if incentive_percentage: return incentive_percentage
+
+@frappe.whitelist()
+def get_pre_sales_activities(pre_sales_incentive_template):
+    "Fill the Pre-Sales Activity Table with a Specific Template"
+    from frappe.model import child_table_fields, default_fields
+
+    template = frappe.get_doc("Pre-Sales Incentive Template", pre_sales_incentive_template)
+
+    template_list = []
+    for i, comm in enumerate(template.get("pre_sales_incentive")):
+        comm = comm.as_dict()
+
+        for fieldname in default_fields + child_table_fields:
+            if fieldname in comm:
+                del comm[fieldname]
+
+        template_list.append(comm)
+
+    return template_list
 
 @frappe.whitelist()
 def get_sales_person(doctype, txt, searchfield, start, page_len, filters):
     return frappe.db.sql(
         f"""SELECT name , employee
             FROM `tabSales Person` 
+            WHERE enabled = 1 AND (name like '%{txt}%' or employee like '%{txt}%')
+            order by name
+            """)
+
+@frappe.whitelist()
+def get_engineer(doctype, txt, searchfield, start, page_len, filters):
+    return frappe.db.sql(
+        f"""SELECT name , employee
+            FROM `tabPre-Sales Engineer` 
             WHERE enabled = 1 AND (name like '%{txt}%' or employee like '%{txt}%')
             order by name
             """)
