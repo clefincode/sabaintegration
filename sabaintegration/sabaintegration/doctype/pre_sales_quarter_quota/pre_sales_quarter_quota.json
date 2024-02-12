@@ -1,0 +1,203 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2023-12-12 08:26:10.875776",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "general_information_section",
+  "naming_series",
+  "title",
+  "engineer",
+  "position",
+  "column_break_6",
+  "year",
+  "quarter",
+  "default_values_section",
+  "incentive_percentage",
+  "kpi",
+  "column_break_12",
+  "primary_incentive_percentage",
+  "secondary_incentive_percentage",
+  "section_break_12",
+  "quota",
+  "column_break_14",
+  "total_quota",
+  "to_get_extra",
+  "achievement_percentage",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_information_section",
+   "fieldtype": "Section Break",
+   "label": "General Information"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Series",
+   "options": "PS-QQ-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "{engineer}",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Title",
+   "no_copy": 1,
+   "print_hide": 1,
+   "report_hide": 1
+  },
+  {
+   "fieldname": "engineer",
+   "fieldtype": "Link",
+   "label": "Engineer",
+   "options": "Pre-Sales Engineer"
+  },
+  {
+   "fetch_from": "engineer.position",
+   "fieldname": "position",
+   "fieldtype": "Select",
+   "label": "Level",
+   "options": "\nTrainee\nJunior\nMid-Level\nSenior\nTeam Leader\nManager\nDirector\nCEO",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "year",
+   "fieldtype": "Link",
+   "label": "Year",
+   "options": "Fiscal Year"
+  },
+  {
+   "fieldname": "default_values_section",
+   "fieldtype": "Section Break",
+   "label": "Default Values"
+  },
+  {
+   "fieldname": "incentive_percentage",
+   "fieldtype": "Percent",
+   "label": "Incentive Percentage",
+   "precision": "3"
+  },
+  {
+   "default": "100",
+   "fieldname": "kpi",
+   "fieldtype": "Percent",
+   "label": "KPI"
+  },
+  {
+   "fieldname": "section_break_12",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "quota",
+   "fieldtype": "Currency",
+   "label": "Quota",
+   "options": "Company:company:default_currency"
+  },
+  {
+   "fieldname": "column_break_14",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_quota",
+   "fieldtype": "Currency",
+   "label": "Total Quota",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "to_get_extra",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "To Get Extra"
+  },
+  {
+   "fieldname": "achievement_percentage",
+   "fieldtype": "Percent",
+   "hidden": 1,
+   "label": "Achievement Percentage"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Pre-Sales Quarter Quota",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "quarter",
+   "fieldtype": "Select",
+   "label": "Quarter",
+   "options": "\nQ1\nQ2\nQ3\nQ4"
+  },
+  {
+   "fieldname": "column_break_12",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1.5",
+   "depends_on": "eval:doc.position==\"Manager\" || doc.position == \"Team Leader\" || doc.position == \"Senior\"",
+   "fieldname": "primary_incentive_percentage",
+   "fieldtype": "Percent",
+   "label": "Primary Incentive Percentage",
+   "precision": "3"
+  },
+  {
+   "default": "0.75",
+   "depends_on": "eval:doc.position == \"Manager\"",
+   "fieldname": "secondary_incentive_percentage",
+   "fieldtype": "Percent",
+   "label": "Secondary Incentive Percentage",
+   "precision": "3"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2024-02-07 15:20:52.063561",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Pre-Sales Quarter Quota",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "show_name_in_global_search": 1,
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title"
+}
