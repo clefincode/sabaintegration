@@ -1,0 +1,216 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2023-12-13 14:50:43.155352",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "product_manager",
+  "position",
+  "brand",
+  "column_break_4",
+  "incentive_percentage",
+  "kpi",
+  "section_break_4",
+  "total_quota",
+  "total_quota_in_order_currency",
+  "achievement_percentage",
+  "section_break_12",
+  "incentive_value",
+  "net_incentive_value",
+  "section_break_17",
+  "base_incentive_value",
+  "base_net_incentive_value",
+  "section_break_20",
+  "team_leader",
+  "leader_to_get_extra",
+  "leader_achievement_percentage",
+  "column_break_15",
+  "manager",
+  "manager_to_get_extra",
+  "manager_achievement_percentage"
+ ],
+ "fields": [
+  {
+   "allow_on_submit": 1,
+   "fieldname": "product_manager",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Product Manager",
+   "options": "Product Manager",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "brand",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Brand",
+   "options": "Brand",
+   "reqd": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fetch_from": "product_manager.incentive_rate",
+   "fetch_if_empty": 1,
+   "fieldname": "incentive_percentage",
+   "fieldtype": "Percent",
+   "in_list_view": 1,
+   "label": "Incentive Percentage",
+   "precision": "3"
+  },
+  {
+   "fieldname": "section_break_4",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fetch_from": "product_manager.position",
+   "fieldname": "position",
+   "fieldtype": "Data",
+   "label": "Level"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_12",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "team_leader",
+   "fieldtype": "Link",
+   "label": "Team Leader",
+   "options": "Product Manager",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "leader_to_get_extra",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Leader to Get Extra"
+  },
+  {
+   "fieldname": "column_break_15",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "manager",
+   "fieldtype": "Link",
+   "label": "Manager",
+   "options": "Product Manager",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "manager_to_get_extra",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Manager to Get Extra"
+  },
+  {
+   "fieldname": "section_break_17",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_20",
+   "fieldtype": "Section Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "kpi",
+   "fieldtype": "Percent",
+   "label": "KPI"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_quota",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Margin Quota",
+   "options": "Company:company:default_currency"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_quota_in_order_currency",
+   "fieldtype": "Currency",
+   "label": "Margin Quota in Order Currency",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "leader_achievement_percentage",
+   "fieldtype": "Percent",
+   "label": "Leader Achievement Percentage",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "manager_achievement_percentage",
+   "fieldtype": "Percent",
+   "label": "Manager Achievement Percentage",
+   "precision": "3",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "incentive_value",
+   "fieldtype": "Currency",
+   "label": "Incentive Value",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "base_incentive_value",
+   "fieldtype": "Currency",
+   "label": "Incentive Value (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "base_net_incentive_value",
+   "fieldtype": "Currency",
+   "label": "NET Incentive Value (Company Currency)",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "achievement_percentage",
+   "fieldtype": "Currency",
+   "label": "Achievement Percentage",
+   "options": "Company:company:default_currency",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "net_incentive_value",
+   "fieldtype": "Currency",
+   "label": "NET Incentive Value",
+   "options": "currency",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-01-23 12:31:54.679494",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Brand Details",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
