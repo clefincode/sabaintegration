@@ -40,8 +40,8 @@ frappe.ui.form.on('Customizer', {
 							"fields": [
 								{
 									fieldname: "ex_doctype",
-									options: "Doctype",
-									label: __("Doctype"),
+									options: "DocType",
+									label: __("DocType"),
 									fieldtype: "Link",
 									in_list_view: 1,
 									reqd: 1,

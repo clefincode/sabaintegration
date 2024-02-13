@@ -14,10 +14,8 @@ class Customizer(Document):
 
 
 @frappe.whitelist()
-def get_doctypes_customization(module, export = 0):
+def get_doctypes_customization(module, export):
 	"Get All the Doctypes That was Updated"
-
-
 	module = module.lower()
 	doctypes = frappe.get_all(
 		'DocType', filters={'istable': 0, 'issingle': 0}, fields=['name']
@@ -25,6 +23,7 @@ def get_doctypes_customization(module, export = 0):
 	doctypeslist = [doc.get("name") for doc in doctypes]
 	customized_doctypes = []
 	for doc in doctypeslist:
+		if not has_json_file(doc, module): continue
 		# Get All Doctype Customization
 		details = get_doc_customization(doc)
 		if not details[0]: continue
@@ -35,10 +34,22 @@ def get_doctypes_customization(module, export = 0):
 		# If the Doctype has to be Exported, Then Add it to the Customized Doctypes List
 		if to_export == 1:
 			customized_doctypes.append(doc)
-			if export == 1:
+			if export == '1':
 				export_customizations(doc, details[1], module)
 		
 	return customized_doctypes
+
+def has_json_file(doctype, module):
+	# If Path 'custom' or the JSON File don't Exist, then There is No Json File to Compare with
+	folder_path = os.path.join(get_module_path(module), "custom")
+	if not os.path.exists(folder_path):
+		return False
+
+	path = os.path.join(folder_path, scrub(doctype) + ".json")
+	if not os.path.exists(path):
+		return False
+
+	return True
 
 def get_doc_customization(doctype):
 	"Get Custom Fields, Permissions, Properties and Links of a Doctype "
@@ -48,6 +59,7 @@ def get_doc_customization(doctype):
 		"custom_perms": [],
 		"links": [],
 		"doctype": doctype,
+		"sync_on_migrate": 1
 	}
 
 	def add(_doctype):
@@ -177,13 +189,12 @@ def compare_links(links, path):
 
 def export_customizations(doctype, custom, module):
 	"Export Customizations to a Specific Module"
-	if custom["custom_fields"] or custom["property_setters"] or custom["custom_perms"]:
+	if custom["custom_fields"] or custom["property_setters"] or custom["custom_perms"] or custom["links"]:
 		folder_path = os.path.join(get_module_path(module), "custom")
 		if not os.path.exists(folder_path):
 			os.makedirs(folder_path)
 
 		path = os.path.join(folder_path, scrub(doctype) + ".json")
+
 		with open(path, "w") as f:
 			f.write(frappe.as_json(custom))	
-
-				
