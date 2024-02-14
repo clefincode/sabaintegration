@@ -1,8 +1,8 @@
-// Copyright (c) 2024, Ahmad and contributors
+// Copyright (c) 2023, Ahmad and contributors
 // For license information, please see license.txt
 /* eslint-disable */
 
-frappe.query_reports["Marketing Incentive to be Paid"] = {
+frappe.query_reports["Pre-Sales Incentives to be Paid"] = {
 	"filters": [
 		{
 			"fieldname":"sales_order",
@@ -11,16 +11,10 @@ frappe.query_reports["Marketing Incentive to be Paid"] = {
 			"options": "Sales Order"
 		},
 		{
-			"fieldname":"product_manager",
-			"label": ("Product Manager"),
+			"fieldname":"engineer",
+			"label": ("Engineer"),
 			"fieldtype": "Link",
-			"options": "Product Manager"
-		},
-		{
-			"fieldname":"brand",
-			"label": ("Brand"),
-			"fieldtype": "Link",
-			"options": "Brand"
+			"options": "Pre-Sales Engineer"
 		},
 		{
 			"fieldname":"quarter",

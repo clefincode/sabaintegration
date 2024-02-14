@@ -1,14 +1,14 @@
-// Copyright (c) 2023, Ahmad and contributors
+// Copyright (c) 2024, Ahmad and contributors
 // For license information, please see license.txt
 /* eslint-disable */
 
-frappe.query_reports["Pre-Sales Activity Incentive"] = {
+frappe.query_reports["Product Manager Incentive Summary"] = {
 	"filters": [
 		{
-			"fieldname":"engineer",
-			"label": ("Engineer"),
+			"fieldname":"product_manager",
+			"label": ("Product Manager"),
 			"fieldtype": "Link",
-			"options": "Pre-Sales Engineer"
+			"options": "Product Manager"
 		},
 		{
 			"fieldname":"quarter",
@@ -27,7 +27,7 @@ frappe.query_reports["Pre-Sales Activity Incentive"] = {
 		},
 	],
 	onload: function(report) {
-		report.page.add_inner_button(__('Apply Incentive on Sales Order'), function() {
+		report.page.add_inner_button(__('Apply Incentives on Sales Order'), function() {
 			var dialog = new frappe.ui.Dialog({
 				title: __("Year & Quarter of Sales Orders"),
 				fields: [
@@ -54,7 +54,7 @@ frappe.query_reports["Pre-Sales Activity Incentive"] = {
 					if(!args) return;
 					dialog.hide();
 					frappe.call({
-						method: "sabaintegration.sabaintegration.report.pre_sales_activity_incentive.pre_sales_activity_incentive.apply_incentive_on_so",
+						method: "sabaintegration.sabaintegration.report.product_manager_incentive_summary.product_manager_incentive_summary.apply_incentive_on_so",
 						args: {
 							args: args
 						},
@@ -62,7 +62,7 @@ frappe.query_reports["Pre-Sales Activity Incentive"] = {
 						callback: function(r) {
 							if(r.message) {
 								msg = "Number of Updated Sales Order: " + r.message
-								msg += "<br> You can check the latest update in Sales Orders <b><a href='/app/query-report/Pre-Sales%20Incentive%20Activity%20Details?year="+ args['year']+"&quarter="+args['quarter']+"'>here</a></b>"
+								msg += "<br> You can check the latest update in Sales Orders <b><a href='/app/query-report/Product%20Manager%20Detailed%20Incentives?year="+ args['year']+"&quarter="+args['quarter']+"'>here</a></b>"
 								frappe.msgprint(msg);
 							}
 						}

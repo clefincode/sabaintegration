@@ -1,21 +1,18 @@
-# Copyright (c) 2024, Ahmad and contributors
+# Copyright (c) 2023, Ahmad and contributors
 # For license information, please see license.txt
-
+import json
 from copy import deepcopy
 
 import frappe
 from frappe import _
 
 from erpnext import get_company_currency, get_default_company
-
-from sabaintegration.sabaintegration.report.marketing_incentive_details.marketing_incentive_details import employees_query 
-from sabaintegration.sabaintegration.doctype.pre_sales_incentive_rule.pre_sales_incentive_rule import calculate_incentive, get_default_rule
+from sabaintegration.sabaintegration.report.pre_sales_detailed_incentives.pre_sales_detailed_incentives import employees_query 
 from sabaintegration.overrides.employee import get_leaders
-from sabaintegration.sabaintegration.doctype.default_kpi.default_kpi import get_default_kpi
 from sabaintegration.sabaintegration.report.quota import is_admin, check_if_team_leader, get_employee
+from sabaintegration.sabaintegration.doctype.pre_sales_incentive_rule.pre_sales_incentive_rule import calculate_incentive, get_default_rule
 
-
-ROLE, DOCTYPE = "0 Accounting - Marketing Incentive Report", "Product Manager"
+ROLE, DOCTYPE = "0 Accounting - Pre-Sales Activity Incentive Report", "Pre-Sales Engineer"
 default_rule = get_default_rule()
 
 def execute(filters=None):
@@ -40,18 +37,11 @@ def get_columns(curriences):
 		"options": "Company:company:default_currency"
 	},
 	{
-		"label": _("Product Manager"),
-		"fieldname": "product_manager",
+		"label": _("Engineer"),
+		"fieldname": "engineer",
 		"fieldtype": "Link",
 		"width": 100,
-		"options": "Product Manager"
-	},
-	{
-		"label": _("Brand"),
-		"fieldname": "brand",
-		"fieldtype": "Link",
-		"width": 100,
-		"options": "Brand"
+		"options": "Pre-Sales Engineer"
 	},
 	{
 		"label": _("Reason"),
@@ -147,8 +137,6 @@ def get_conditions(filters):
 	conditions = ""
 	if filters.get("sales_order"):
 		conditions += " and so.name = %(sales_order)s"
-	if filters.get("brand"):
-		conditions += " and brands.brand = %(brand)s"
 	if filters.get("year"):
 		conditions += " and EXTRACT(YEAR FROM je.submitting_date) = %(year)s"
 	if filters.get("quarter"):
@@ -156,38 +144,38 @@ def get_conditions(filters):
 	return conditions
 
 def get_data(filters):
+
 	co_results = get_payments_details(filters, True)
 	
 	return co_results
 
 def get_payments_details(filters, add_supervisior_row = False):
 	conditions = get_conditions(filters)
-	admin, product_manager = is_admin(frappe.session.user, ROLE, DOCTYPE)
+	sos = ''
 	employees, employees_list = '', []
-	if not admin and product_manager:
-
-		if not filters.get("product_manager"):
-			emp = employees_query(product_manager)
+	admin, engineer = is_admin(frappe.session.user, ROLE, DOCTYPE)
+	
+	if not admin and engineer:
+		if not filters.get("engineer"):
+			emp = employees_query(engineer)
 			employees_list = emp[2:-1].split("', '")
-			employees = "and brands.product_manager in ({}) ".format(emp)
+			employees = "and pre_sales.engineer in ({}) ".format(emp)
 		else:
-			eng = employees_query(product_manager, filters.get("product_manager", None))
+			eng = employees_query(engineer, filters.get("product_manager", None))
 			employees_list = eng.split("', '")
 			if not eng: return
 
-			employees = "and brands.product_manager = '{}' ".format(product_manager)
+			employees = "and pre_sales.engineer = '{}' ".format(engineer)
 
 	elif filters.get("engineer"):
-		employees += " and brands.product_manager = %(product_manager)s"
+		employees += " and pre_sales.engineer = %(engineer)s"
 
 	filters["is_admin"] = admin
-
-	sos = ''
 	if employees:
 		soslist = frappe.db.sql("""
 			select distinct so.name
 			from `tabSales Order` as so
-			inner join `tabBrand Details` as brands on brands.parent = so.name
+			inner join `tabPre-Sales Incentive` as pre_sales on pre_sales.parent = so.name
 			where so.docstatus = 1
 			{employees}
 		""".format(employees = employees, conditions = conditions), filters, as_list = 1)
@@ -231,11 +219,6 @@ def get_payments_details(filters, add_supervisior_row = False):
 
 	results, sos, currencies = [], {}, []
 
-	qq = frappe.get_doc("Marketing Quarter Quota", {
-		"year": filters['year'],
-		"quarter": filters['quarter'],
-		"docstatus": 1
-	})
 	for entry in so_entries:
 		sales_order = entry['sales_order']
 		set_payment_in_debit_currency(entry)
@@ -250,7 +233,7 @@ def get_payments_details(filters, add_supervisior_row = False):
 		if entry.account_currency not in currencies:
 			currencies.append(entry.account_currency)
 
-		details = set_so_details(entry, sos, qq, employees_list, filters)
+		details = set_so_details(entry, sos, employees_list, filters)
 		
 		if details:
 			results.extend(details)
@@ -286,29 +269,29 @@ def set_payment_in_debit_currency(entry):
 			entry["account_currency"] = account.account_currency
 			return
 
-def set_so_details(entry, sos, qq, employees_list, filters):
-	doc = frappe.get_doc("Sales Order", entry["sales_order"])
+
+def set_so_details(entry, sos, employees_list, filters):
+	sales_order = entry["sales_order"]
+	doc = frappe.get_doc("Sales Order", sales_order)
 	
-	if not doc.get("brands"): return
+	if not doc.get("pre_sales_activities"): return
 	
 	total_details = []
-	for row in doc.brands:
-		if filters.get("product_manager") and filters["product_manager"] != row.product_manager: continue
-
-		if filters.get("brand") and filters["brand"] != row.brand: continue
+	for row in doc.pre_sales_activities:
+		if filters.get("engineer") and filters["engineer"] != row.engineer: continue
 
 		details = deepcopy(entry)
-		details['product_manager'] = row.product_manager
-		details['brand'] = row.brand
-		details['reason'] = "Product Manager"
+		details['engineer'] = row.engineer
+		details['reason'] = "Pre-Sales Engineer"
+		details['achievement_percentage'] = frappe.db.get_value("Pre-Sales Quarter Quota", {
+			"engineer": row.engineer,
+			"year": filters['year'],
+			"quarter": filters['quarter'],
+			"docstatus": 1
+			}, "achievement_percentage")
 
-		for b_row in qq.brands:
-			if row.product_manager == b_row.product_manager and row.brand == b_row.brand:
-
-				details['achievement_percentage'] = b_row.achievement_percentage
-				break
-
-		details['achieve_target'] = calculate_incentive(details['achievement_percentage'], default_rule)
+		rule = get_default_rule()
+		details['achieve_target'] = calculate_incentive(details['achievement_percentage'], rule)
  	
 		details['base_net_incentive_value'] = row.base_net_incentive_value
 		details['net_incentive_percentage_from_to'] = row.base_net_incentive_value / entry['base_grand_total'] * 100
@@ -327,7 +310,7 @@ def set_so_details(entry, sos, qq, employees_list, filters):
 			(year =  %(year)s and quarter < %(quarter)s) or
 			(year < %(year)s)			
 			) group by sales_order
-		""".format(sales_order = entry["sales_order"]), filters, as_list = 1)
+		""".format(sales_order = sales_order), filters, as_list = 1)
 
 		if previous_payment and previous_payment[0]:
 			details['previous_payment'] = previous_payment[0][0]
@@ -336,113 +319,89 @@ def set_so_details(entry, sos, qq, employees_list, filters):
 		
 
 		details['previous_incentive'] = details['net_incentive_percentage_from_to'] * details['previous_payment'] / 100
-		details['remaining_payment'] = details['base_grand_total'] - (details['previous_payment'] + (sos[entry["sales_order"]]))
+		details['remaining_payment'] = details['base_grand_total'] - (details['previous_payment'] + (sos[sales_order]))
 		details['remaining_incentive'] = details['net_incentive_percentage_from_to'] * details['remaining_payment'] / 100
 		entry['remaining_payment'] = details['remaining_payment']
 		
-		details['total_quota'] = row.total_quota
-		details['brand'] = row.brand
 
 		total_details.append(details)
-		add_supervision_rows(total_details, details, entry, qq, employees_list, filters)
+		add_supervision_rows(total_details, details, entry, employees_list, filters)
 	return total_details
 
-def add_supervision_rows(total_details, row, entry, qq, employees_list, filters):
-	product_manager = row['product_manager']
+def add_supervision_rows(total_details, row, entry, employees_list, filters):
+	engineer = row['engineer']
 	new_row_primary, new_row_secondary = deepcopy(entry), deepcopy(entry)
-	employee = get_employee(DOCTYPE, product_manager)
+	employee = get_employee(DOCTYPE, engineer)
 	if not employee:
-		frappe.throw("There is no Employee record for Product Manager {}".format(product_manager))
+		frappe.throw("There is no Employee record for Engineer {}".format(engineer))
 	
 	leaders = get_leaders(employee.name, "name", "reports_to")
 
 	secondary = True
 	if leaders:
 		if employee.position == "Team Leader":
-			new_row_primary['product_manager'] = product_manager
-			leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[0]}, "name")
-			if leader_engineer: new_row_secondary['product_manager'] = leader_engineer
+			new_row_primary['engineer'] = engineer
+			leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[0]}, "name")
+			if leader_engineer: new_row_secondary['engineer'] = leader_engineer
 			else: secondary = False
 
 		elif employee.position == "Manager":
-			new_row_primary['team_primary_supervisior'] = product_manager
-			new_row_secondary['team_secondary_supervisior'] = product_manager
+			new_row_primary['team_primary_supervisior'] = engineer
+			new_row_secondary['team_secondary_supervisior'] = engineer
 
 		elif employee.position == "Senior":
-			is_leader = check_if_team_leader(employee)
+			is_leader= check_if_team_leader(employee)
 			if is_leader:
 				
-				new_row_primary['product_manager'] = product_manager
-				leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[0]}, "name")
-				if leader_engineer: new_row_secondary['product_manager'] = leader_engineer
+				new_row_primary['engineer'] = engineer
+				leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[0]}, "name")
+				if leader_engineer: new_row_secondary['engineer'] = leader_engineer
 				else: secondary = False
 			else:
-				leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[0]}, "name")
-				if leader_engineer: new_row_primary['product_manager'] = leader_engineer
+				leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[0]}, "name")
+				if leader_engineer: new_row_primary['engineer'] = leader_engineer
 
 				if len(leaders) > 1:
-					leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[1]}, "name")
-					if leader_engineer: new_row_secondary['product_manager'] = leader_engineer
+					leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[1]}, "name")
+					if leader_engineer: new_row_secondary['engineer'] = leader_engineer
 					else: secondary = False
 				else:
 					secondary = False
 		else:
-			leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[0]}, "name")
-			if leader_engineer: new_row_primary['product_manager'] = leader_engineer
-
+			leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[0]}, "name")
+			if leader_engineer: new_row_primary['engineer'] = leader_engineer
+			
 			if len(leaders) > 1:
-				leader_engineer = frappe.db.get_value("Product Manager", {"employee": leaders[1]}, "name")
-
-				if leader_engineer: new_row_secondary['product_manager'] = leader_engineer
+				leader_engineer = frappe.db.get_value("Pre-Sales Engineer", {"employee": leaders[1]}, "name")
+				if leader_engineer: new_row_secondary['engineer'] = leader_engineer
 				else: secondary = False
 			else:
 				secondary = False
 	else:
-		new_row_primary['product_manager'] = product_manager
-		new_row_secondary['product_manager'] = product_manager
+		new_row_primary['engineer'] = engineer
+		new_row_secondary['engineer'] = engineer
 
-	if new_row_primary.get("product_manager") and (new_row_primary["product_manager"] in employees_list or filters.get("is_admin", 0) == 1):
-		new_row_primary["total_quota"] = row['total_quota']
-		new_row_primary["brand"] = row["brand"]
-
-		get_leader_supervision_values(new_row_primary, qq, filters, "leader")
+	if new_row_primary.get("engineer") and (new_row_primary["engineer"] in employees_list or filters.get("is_admin", 0) == 1):
+		get_leader_supervision_values(new_row_primary, filters, "primary")
 		total_details.append(new_row_primary)
-	if secondary and new_row_secondary.get("product_manager") and (new_row_secondary["product_manager"] in employees_list or filters.get("is_admin", 0) == 1):
-			new_row_secondary["total_quota"] = row['total_quota']
-			new_row_secondary["brand"] = row["brand"]	
+	if secondary and new_row_secondary.get("engineer") and (new_row_secondary["engineer"] in employees_list or filters.get("is_admin", 0) == 1):		
+		get_leader_supervision_values(new_row_secondary, filters, "secondary")
+		total_details.append(new_row_secondary)
+
+def get_leader_supervision_values(row, filters, level):
+	row["reason"] = level +" Supervision"
+	percents = frappe.db.get_value("Pre-Sales Quarter Quota", {
+			"engineer": row.engineer,
+			"year": filters['year'],
+			"quarter": filters['quarter'],
+			"docstatus": 1
+			}, [level+"_incentive_percentage", "achievement_percentage", "kpi"])
 	
-			get_leader_supervision_values(new_row_secondary, qq, filters, "manager")
-			total_details.append(new_row_secondary)
-
-def get_leader_supervision_values(row, qq, filters, level):
-	row["reason"] = level.capitalize()
-	level_field = level
-	if level == "leader": 
-		row["reason"] = "Team " + row["reason"]
-		level_field = "team_leader"
-
-	incentive_percentage = frappe.db.get_value("Marketing Leader Quota", {
-			"parent": qq.name,
-			"leading_product_manager": row.product_manager,
-			}, "extra") or 0
-	
-	achievement_percentage = frappe.db.get_value("Brand Details", {
-			"parent": qq.name,
-			"brand": row.brand,
-			level_field : row.product_manager
-			}, level + "_achievement_percentage") or 0
-
-	kpi = get_default_kpi(
-		doc = 'Marketing Quarter Quota',
-		person = row.product_manager,
-		year = filters['year'],
-		quarter = filters['quarter']
-	)
-
-	achieved_target = calculate_incentive(achievement_percentage, default_rule)
+	rule = get_default_rule()
+	achieved_target = calculate_incentive(percents[1], rule)
  	
-	row['incentive_value'] = row['total_quota'] * incentive_percentage / 100 * achieved_target / 100 # * original_row['achieve_target'] / 100
-	row['base_net_incentive_value'] = row['incentive_value'] * kpi / 100
+	row['incentive_value'] = row['base_expected_profit_loss_value'] * percents[0] / 100 * achieved_target / 100 # * original_row['achieve_target'] / 100
+	row['base_net_incentive_value'] = row['incentive_value'] * percents[2] / 100
 	row['net_incentive_percentage_from_to'] = row['base_net_incentive_value'] / row['base_grand_total'] * 100
 
 	formatted_number = "{:,.2f}".format(row['net_incentive_percentage_from_to'] * row['current_payment'] / 100)
@@ -450,6 +409,7 @@ def get_leader_supervision_values(row, qq, filters, level):
 	
 	row['previous_incentive'] = row['net_incentive_percentage_from_to'] * row['previous_payment'] / 100
 	row['remaining_incentive'] = row['net_incentive_percentage_from_to'] * row['remaining_payment'] / 100
+
 
 def get_additional_taxes(sales_order, filters):
 	sales_order = frappe.get_doc("Sales Order", sales_order)
@@ -486,3 +446,40 @@ def get_additional_taxes(sales_order, filters):
 	
 	return additional_taxes
 
+@frappe.whitelist()
+def create_journal_entry(args):
+	args = json.loads(args)
+	if not args.get("year") or not args.get("quarter") and not args.get("annual"):
+		frappe.throw("Select Year and Quarter to create the journal entry")
+	
+	if not args.get("annual"):
+		commissions = get_payments_details(args, add_supervisior_row=True)
+	
+	if commissions:
+		sales_men = {}
+		for row in commissions:
+			sales_men[row["sales_person"]] = sales_men.get(row["sales_person"], 0) + row["current_commission"]
+		
+		doc = frappe.new_doc("Journal Entry")
+		doc.is_quarter_commission = 1
+		doc.year = args.get("year")
+		doc.quarter = args.get("quarter") if args.get("quarter") else ''
+		accounts = []
+		for sales_man in sales_men:
+			emp = frappe.db.get_value("Sales Person", sales_man, "employee")
+			if emp:
+				accounts.append({
+					'doctype':'Journal Entry Account',
+					'party_type': 'Employee',
+					'party': emp,
+					'debit_in_account_currency': sales_men[sales_man],
+					'debit': sales_men[sales_man],
+				})
+
+				accounts.append({
+					'account': '11001002 - Cash EGP - S',
+					'credit_in_account_currency': sales_men[sales_man],
+					'credit': sales_men[sales_man]
+				})
+		doc.set("accounts", accounts)
+		return doc

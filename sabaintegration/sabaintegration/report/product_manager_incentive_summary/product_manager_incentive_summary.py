@@ -5,9 +5,8 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from sabaintegration.overrides.employee import get_leaders, get_employees
-from sabaintegration.sabaintegration.report.quota import check_if_leader, get_employee, QuotaCalculations
-from sabaintegration.sabaintegration.doctype.pre_sales_incentive_rule.pre_sales_incentive_rule import calculate_incentive, get_default_rule
+from sabaintegration.sabaintegration.report.quota import QuotaCalculations
+from sabaintegration.sabaintegration.doctype.pre_sales_incentive_rule.pre_sales_incentive_rule import get_default_rule
 from sabaintegration.sabaintegration.doctype.default_kpi.default_kpi import get_default_kpi
 
 default_rule = get_default_rule()

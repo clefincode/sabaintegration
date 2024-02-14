@@ -99,12 +99,12 @@ def get_columns():
 			"fieldtype": "Percent",
 			"width": 100,
 		},
-		{
-			"label": _("Brand Achievement Percentage"),
-			"fieldname": "brand_achieve_percent",
-			"fieldtype": "Percent",
-			"width": 100,
-		},
+		# {
+		# 	"label": _("Brand Achievement Percentage"),
+		# 	"fieldname": "brand_achieve_percent",
+		# 	"fieldtype": "Percent",
+		# 	"width": 100,
+		# },
 		{
 			"label": _("Member Default Achieving Value"),
 			"fieldname": "default_achieving_value",

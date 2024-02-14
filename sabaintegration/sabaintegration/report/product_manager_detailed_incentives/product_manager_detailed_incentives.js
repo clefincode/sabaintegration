@@ -1,8 +1,8 @@
-// Copyright (c) 2023, Ahmad and contributors
+// Copyright (c) 2024, Ahmad and contributors
 // For license information, please see license.txt
 /* eslint-disable */
 
-frappe.query_reports["Pre-Sales Incentive Activity Details"] = {
+frappe.query_reports["Product Manager Detailed Incentives"] = {
 	"filters": [
 		{
 			"fieldname":"sales_order",
@@ -11,16 +11,22 @@ frappe.query_reports["Pre-Sales Incentive Activity Details"] = {
 			"options": "Sales Order"
 		},
 		{
-			"fieldname":"engineer",
-			"label": ("Engineer"),
+			"fieldname":"product_manager",
+			"label": ("Product Manager"),
 			"fieldtype": "Link",
-			"options": "Pre-Sales Engineer"
+			"options": "Product Manager"
+		},
+		{
+			"fieldname":"brand",
+			"label": ("Brand"),
+			"fieldtype": "Link",
+			"options": "Brand"
 		},
 		{
 			"fieldname":"supervisior",
 			"label": ("Supervisior"),
 			"fieldtype": "Link",
-			"options": "Pre-Sales Engineer"
+			"options": "Product Manager"
 		},
 		{
 			"fieldname":"quarter",
@@ -46,6 +52,5 @@ frappe.query_reports["Pre-Sales Incentive Activity Details"] = {
 function get_quarter(){
 	var today = new Date();
 	var quarter = Math.floor((today.getMonth() + 3) / 3);
-	console.log(quarter)
 	return "Q" + quarter;
 }
