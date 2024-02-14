@@ -30,6 +30,7 @@ class MarketingQuarterQuota(Document):
 		for row in self.brands:
 			self.check_brands_duplications(row, brands)
 			self.set_incentive_percentage(row)
+			row.achievement_percentage = 0
 			self.set_leaders(row)
 
 	def check_brands_duplications(self, row, brands):
@@ -81,6 +82,7 @@ class MarketingQuarterQuota(Document):
 		if not manager: 
 			frappe.throw(f"There is no Product Manager record for {manager_e}")
 
+		row.leader_achievement_percentage = row.manager_achievement_percentage = row.leader_to_get_extra = row.manager_to_get_extra= 0
 		self.set_leaders_quota(row)
 	
 	def set_leaders_quota(self, row):
