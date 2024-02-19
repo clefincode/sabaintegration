@@ -413,7 +413,7 @@ class QuotaCalculations:
 			prm_extra = doc.prm_sup_percentage
 			if not prm_extra:
 				prm_extra = frappe.db.get_value("Quarter Quota", {
-				'sales_person': person_row, 
+				'sales_man': person_row, 
 				'year': self.filters['year'],
 				'quarter': self.filters['quarter'],
 				'docstatus': 1
@@ -538,7 +538,7 @@ class QuotaCalculations:
 				
 				if not extra:
 					extra = frappe.db.get_value("Quarter Quota", {
-						'sales_person': leader_person, 
+						'sales_man': leader_person, 
 						'year': self.filters['year'],
 						'quarter': self.filters['quarter'],
 						'docstatus': 1
