@@ -44,7 +44,23 @@ frappe.ui.form.on("Sales Order", {
 		frm.set_df_property("expected_profit_loss", "read_only", 1);
 	    frm.set_df_property("expected_profit_loss_value", "read_only", 1);
 	    frm.set_df_property("base_expected_profit_loss_value", "read_only", 1);
+		if (['erp@saba-eg.com', 'hossam@saba-eg.com', 'hayam@saba-eg.com'].includes(frappe.session.user)){
+			const childTableName = "costs" ;
 
+			if (frm.doc[childTableName] && frm.doc[childTableName].length > 0) {
+				// Loop through each row in the child table
+				frm.doc[childTableName].forEach((row) => {
+					// Accessing the meta data of the child table to get all fields
+					const childFields = frappe.get_meta(row.doctype).fields;
+					
+					// Loop through each field in the child row
+					childFields.forEach((field) => {
+						frm.set_df_property("costs", 'allow_on_submit', 1, frm.doc.name, field.fieldname, row.name);
+					});
+				});
+				
+			}
+		}	
 		// Show the Download button under the items child table in submitted documents
 		frm.fields_dict.items.grid.wrapper.find('.grid-upload').removeClass("hidden");
 		if(frm.doc.docstatus == 1){
