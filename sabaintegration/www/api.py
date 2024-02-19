@@ -661,3 +661,41 @@ def custom_validate_je(self, *args, **kwargs):
 
 			# If needed, convert it back to string
 			self.submitting_date = new_date.strftime("%Y-%m-%d %H:%M:%S")
+
+@frappe.whitelist()
+def move_field_to_field(field, new_field, doctype):
+	all_docs = frappe.db.get_all(doctype, {field: ("!=", "")}, ["name", field])
+	for doc in all_docs:
+		new_value = convert_to_float(doc.get(field))
+		frappe.db.set_value(doctype, doc.name, new_field, new_value)
+	frappe.db.commit()
+	return all_docs
+
+def convert_to_float(s):
+	import re
+	# Remove commas and any non-numeric characters except for the decimal point
+	cleaned_string = re.sub(r"[^\d.]", "", s.replace(",", ""))
+	# Convert the cleaned string to float
+	try:
+		return float(cleaned_string)
+	except ValueError:
+		# Handle the case where the string cannot be converted to float
+		return None
+
+@frappe.whitelist()
+def update_sales_orders_brands(year, quarter):
+	strQuery = f"""
+		select name from `tabSales Order` as so
+		where so.docstatus = 1 and so.submitting_date != '' and so.submitting_date is not null
+		and EXTRACT(YEAR FROM so.submitting_date) = '{year}'
+		and CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0) = '{quarter}'
+	"""
+	docs = frappe.db.sql(strQuery, as_list = 1)
+	for d in docs:
+		doc = frappe.get_doc("Sales Order", d[0])
+		doc.set_brands()
+		doc.save()
+
+	frappe.db.commit()
+
+	return docs
