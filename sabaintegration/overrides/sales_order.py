@@ -94,7 +94,7 @@ class CustomSalesOrder(SalesOrder):
             if not self.primary_supervisor:
                 self.primary_supervisor = values["primary_supervisor"]
             if not self.secondary_supervisor:
-                self.secondary_supervisor = values["secondary_supervisior"]
+                self.secondary_supervisor = values["secondary_supervisor"]
             if not self.prm_sup_percentage:
                 self.prm_sup_percentage = values["prm_sup_percentage"]
             if not self.sec_sup_percentage == values["sec_sup_percentage"]:
