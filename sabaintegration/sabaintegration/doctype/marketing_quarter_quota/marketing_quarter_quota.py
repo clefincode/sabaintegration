@@ -94,7 +94,7 @@ class MarketingQuarterQuota(Document):
 				self.append("leaders", frappe._dict({
 					"leading_product_manager": row.get(level),
 					"title": Clevel.capitalize(),
-					"total_margin_quota": row.total_quota,
+					"total_margin_quota": row.total_quota or 0,
 					#"extra": row.incentive_percentage
 				}))
 			else:
@@ -108,7 +108,7 @@ class MarketingQuarterQuota(Document):
 					self.append("leaders", frappe._dict({
 						"leading_product_manager": row.get(level),
 						"title": Clevel.capitalize(),
-						"total_margin_quota": row.total_quota,
+						"total_margin_quota": row.total_quota or 0,
 						#"extra": row.incentive_percentage
 					}))
 

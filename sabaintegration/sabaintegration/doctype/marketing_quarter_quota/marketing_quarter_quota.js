@@ -50,6 +50,10 @@ frappe.ui.form.on('Marketing Quarter Quota', {
 });
 
 frappe.ui.form.on('Brand Details', {
+	brands_add: function(frm, cdt, cdn){
+		frappe.model.set_value(cdt, cdn, "total_quota", 0);
+		frappe.model.set_value(cdt, cdn, "incentive_percentage", 0);
+	},
 	product_manager: function(frm, cdt, cdn){
 		let d = locals[cdt][cdn];
 		get_pm_details(d);
