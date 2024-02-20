@@ -212,13 +212,13 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 			"commission_value", "net_commission_value"
 		], this.frm.doc.currency, "sales_commission");
 
-		this.frm.set_currency_labels([
-			"base_incentive_value", "base_net_incentive_value"
-		], company_currency, "pre_sales_activities");
+		// this.frm.set_currency_labels([
+		// 	"base_incentive_value", "base_net_incentive_value"
+		// ], company_currency, "pre_sales_activities");
 
-		this.frm.set_currency_labels([
-			"incentive_value", "net_incentive_value"
-		], this.frm.doc.currency, "pre_sales_activities");
+		// this.frm.set_currency_labels([
+		// 	"incentive_value", "net_incentive_value"
+		// ], this.frm.doc.currency, "pre_sales_activities");
 	}
 	additional_discount_percentage() {
 		this.frm.cscript.calculate_taxes_and_totals();
