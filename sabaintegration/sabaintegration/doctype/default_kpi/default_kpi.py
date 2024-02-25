@@ -8,7 +8,22 @@ class DefaultKPI(Document):
 	def validate(self):
 		if frappe.db.exists("Default KPI", {"name": ("!=", self.name), "year": self.year, "quarter": self.quarter, "docstatus": ("!=", 2)}):
 			frappe.throw("You've already had a Default KPI in the same year and quarter")
-		
+		self.validate_details()
+
+	def on_update_after_submit(self):
+		self.validate_details()
+
+	def validate_details(self):
+		if not self.get("kpi_details"): return
+		employees = []
+		for row_num, row in enumerate(self.kpi_details):
+			if row.employee in employees:
+				frappe.throw("Row # {}: Duplicated Row".format(row_num + 1))
+			if not row.employee_name:
+				row.employee_name = frappe.db.get_value("Employee", row.employee, "employee_name")
+			if not row.department:
+				row.department = frappe.db.get_value("Employee", row.employee, "department")
+			employees.append(row.employee)
 
 @frappe.whitelist()
 def get_default_kpi(**kwargs):
@@ -43,3 +58,10 @@ def get_default_kpi(**kwargs):
 			return kpi
 	return kpi
 
+@frappe.whitelist()
+def get_all_employees(department = None):
+	filters = {"status": "Active"}
+	if department:
+		filters["department"] = department	
+	
+	return frappe.db.get_all("Employee", filters, ["name", "employee_name", "department"], order_by = "employee_name")
