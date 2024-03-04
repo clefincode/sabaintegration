@@ -2,6 +2,7 @@
 
 import frappe
 
+#  bench execute sabaintegration.www.disable_emails.disable_emails
 def disable_emails():
     "Disable all Emails Account to Prevent Sending Email from Test Server"
 
