@@ -131,16 +131,19 @@ class CustomSalesOrder(SalesOrder):
             submitting_date = frappe.db.get_value("Sales Order", self.amended_from, "submitting_date")
             if submitting_date: self.submitting_date = submitting_date
 
-    def set_brands(self):
+    def set_brands(self, quarter_args=None, update_table = False):
         "Set The Brands Table"
 
-        # Get the Year and the Quarter of Today
         toset = True
-        today_date = datetime.now()
-        today_qq = (today_date.month, today_date.year)
+        if not quarter_args:
+            # Get the Year and the Quarter of Today
+            today_date = datetime.now()
+            today_qq = (today_date.month, today_date.year)
+        else:
+            today_qq = quarter_args
 
         # If The Doc is not New, Then Compare it with the Previous State
-        if self.get_doc_before_save():
+        if (self.get_doc_before_save() or self.get("brands")) and update_table == False:
             # Get the Previous Modifiation Year and Quarter
             modified_dt = self.get_doc_before_save().modified
             before_save_qq = (modified_dt.month, modified_dt.year)
@@ -163,9 +166,15 @@ class CustomSalesOrder(SalesOrder):
             brand = frappe.db.get_value("Item", item.item_code, "brand")
             if not brand: brand = "Unknown"
             if not brands.get(brand):
-                brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
-            else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
-        
+                if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
+                    brands[brand] = (item.base_amount, item.base_rate, item.amount, item.rate)
+                else: brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
+            else: 
+                if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
+                    brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + item.base_rate, brands[brand][2] + item.amount, brands[brand][3] + item.rate)
+                else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
+
+            
         quarter = "Q" + str(get_quarter(today_qq[0]))
         if frappe.db.exists("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1}):
             # Assign Each Brand with its Product Manager

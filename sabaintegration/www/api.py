@@ -693,7 +693,8 @@ def update_sales_orders_brands(year, quarter):
 	docs = frappe.db.sql(strQuery, as_list = 1)
 	for d in docs:
 		doc = frappe.get_doc("Sales Order", d[0])
-		doc.set_brands()
+		doc.update_total_margin()
+		doc.set_brands((doc.submitting_date.month, doc.submitting_date.year), True)
 		doc.save()
 
 	frappe.db.commit()
