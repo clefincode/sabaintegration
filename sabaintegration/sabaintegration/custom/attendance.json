@@ -891,7 +891,7 @@
    "name": "Attendance-working_in_a_vacation_",
    "no_copy": 0,
    "non_negative": 0,
-   "options": "0\n1 Hour (4 Points)\n2 Hours (8 Points)\n3 Hours (12 Points)\n4 Hours (16 Points)",
+   "options": "0\n1 Hour (4 Points)\n2 Hours (8 Points)\n3 Hours (12 Points)\n4 Hours (9 Points)\n4 Hours (16 Points)",
    "owner": "hossam@saba-eg.com",
    "parent": null,
    "parentfield": null,
