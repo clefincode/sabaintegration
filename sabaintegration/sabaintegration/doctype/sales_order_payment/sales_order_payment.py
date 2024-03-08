@@ -52,7 +52,7 @@ def set_payment(quarter, year):
 
         if frappe.db.exists("Sales Order Payment", {
                "sales_order": sales_order, 
-               "quarter": 'Q' + quarter, 
+               "quarter": 'Q' + str(quarter), 
                "year": year, 
                "docstatus": 1
                }):
@@ -64,7 +64,7 @@ def set_payment(quarter, year):
         sop = frappe.new_doc("Sales Order Payment")
         sop.sales_order = sales_order
         sop.year = year
-        sop.quarter = 'Q' + quarter
+        sop.quarter = 'Q' + str(quarter)
         sop.current_payment = sales_orders[sales_order]
         sop.insert(ignore_permissions = True)
 
