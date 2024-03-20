@@ -182,7 +182,7 @@ def get_payments_details(filters, employees = '', add_supervisior_row = False):
 		select distinct so.name as sales_order, so.base_grand_total,
 		je.name as entry, jea.name as account_name, 
 		jea.credit_in_account_currency as current_payment, jea.credit,
-		jea.account_currency, jea.exchange_rate
+		jea.account_currency, jea.exchange_rate, je.creation as creation_date
 		from `tabJournal Entry` as je
 		inner join `tabJournal Entry Account` as jea on jea.parent = je.name
 		inner join `tabSales Invoice` as si on jea.reference_name = si.name and si.docstatus = 1
@@ -197,14 +197,14 @@ def get_payments_details(filters, employees = '', add_supervisior_row = False):
 		select distinct so.name as sales_order, so.base_grand_total,
 		je.name as entry, jea.name as account_name,
 		jea.credit_in_account_currency as current_payment, jea.credit,
-		jea.account_currency, jea.exchange_rate
+		jea.account_currency, jea.exchange_rate, je.creation as creation_date
 		from `tabJournal Entry` as je
 		inner join `tabJournal Entry Account` as jea on jea.parent = je.name
 		inner join `tabSales Order` as so on so.name = jea.reference_name and so.docstatus = 1
 		where je.docstatus = 1
 		{sos}
 		{conditions}
-		order by sales_order
+		order by sales_order, creation_date
 
 	""".format(conditions = conditions, sos = sos)
 	so_entries = frappe.db.sql(strQuery, filters, as_dict = 1)
