@@ -1,9 +1,20 @@
 import frappe
 
 def quotation_query(user):
+    from sabaintegration.overrides.employee import get_employees
     if not user:
         user = frappe.session.user
     roles = frappe.get_roles()
+    users = "("
+    if user != "Administrator" and "System Manager" not in roles:
+        employee = frappe.db.get_value("Employee", {"user_id": user}, "name")
+        employees = get_employees(employee, "name", "reports_to")
+        if employees:
+            for emp in employees:
+                user_id = frappe.db.get_value("Employee", {"employee": emp}, "user_id")
+                if not user_id: continue
+                users += f'"{user_id}",'
+    users += f'"{user}")'
 
     strroles = "("
     for role in roles:
@@ -12,15 +23,14 @@ def quotation_query(user):
     strroles += ')'
 
     strWhere = """
-    (`tabQuotation`.opportunity_owner is null or `tabQuotation`.opportunity_owner = '' or `tabQuotation`.opportunity_owner = {user})
+    `tabQuotation`.opportunity_owner in {users}
     or ('Sales Manager' in {roles} or 
         'System Manager' in {roles} or
         '0 Selling - Quotation Creation (Can view All)' in {roles} or
         '0 Selling - Quotation Admin' in {roles}
         )
 
-    """.format(user=frappe.db.escape(user), roles = strroles)
-    
+    """.format(users=users, roles = strroles)
     return strWhere
 
 def has_permission(doc, user):
