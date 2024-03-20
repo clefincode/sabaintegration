@@ -549,7 +549,7 @@ class QuotaCalculations:
 			if not leader_row in person_comm:
 				if self.doctype == "Product Manager":
 					kpi = get_default_kpi(doc = 'Marketing Quarter Quota', person = leader_person, year = self.filters['year'] , quarter = self.filters['quarter'])
-					achieve_percent = total_achievement_values[leader_person] / l_row.total_margin_quota * 100
+					achieve_percent = total_achievement_values[leader_person] / l_row.total_margin_quota * 100 if l_row.total_margin_quota > 0 else 0
 					person_comm[leader_row] = {
 						"kpi": kpi,
 						"achieve_percent": achieve_percent,
