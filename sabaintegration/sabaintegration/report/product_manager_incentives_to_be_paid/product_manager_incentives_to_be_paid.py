@@ -420,11 +420,11 @@ def get_leader_supervision_values(row, qq, filters, level):
 	if level == "leader": 
 		row["reason"] = "Team " + row["reason"]
 		level_field = "team_leader"
-
+	extra = "primary_extra" if level_field == "team_leader" else "secondary_extra"
 	incentive_percentage = frappe.db.get_value("Marketing Leader Quota", {
 			"parent": qq.name,
 			"leading_product_manager": row.product_manager,
-			}, "extra") or 0
+			}, extra) or 0
 	
 	achievement_percentage = frappe.db.get_value("Brand Details", {
 			"parent": qq.name,

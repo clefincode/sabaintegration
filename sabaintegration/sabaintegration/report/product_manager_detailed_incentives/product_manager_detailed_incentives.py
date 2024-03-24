@@ -290,8 +290,8 @@ def get_leaders_supervision_values(row, employees_list, get_supervision):
 
 	for level in ["team_leader", "manager"]:
 		if not get_supervision and row[level] != row["member"] and row[level] not in employees_list: continue
-		
-		total_margin_quota, incentive_percentage = frappe.db.get_value("Marketing Leader Quota", {"parent": row['qq_name'], "leading_product_manager": row[level]}, ["total_margin_quota", "extra"])
+		extra = "primary_extra" if level == "team_leader" else "secondary_extra"
+		total_margin_quota, incentive_percentage = frappe.db.get_value("Marketing Leader Quota", {"parent": row['qq_name'], "leading_product_manager": row[level]}, ["total_margin_quota", extra])
 
 		if row["base_net_incentive_value"] == 0: 
 			base_net_incentive_value = 0
@@ -317,7 +317,7 @@ def get_leaders_supervision_values(row, employees_list, get_supervision):
 			"base_net_incentive_value": base_net_incentive_value,
 			
 		}
-		new_row["incentive_to_total"] = new_row["base_net_incentive_value"] / row["base_grand_total"] * 100
+		new_row["incentive_to_total"] = new_row["base_net_incentive_value"] / row["base_grand_total"] * 100 if row["base_grand_total"] > 0 else new_row["base_net_incentive_value"] * 100
 		
 		new_rows.append(new_row)
 	return new_rows
