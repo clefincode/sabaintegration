@@ -99,6 +99,7 @@ permission_query_conditions = {
 #
 has_permission = {
  	"Event": "sabaintegration.www.permissions.has_permission",
+    "Quotation": "sabaintegration.www.permissions.has_permission"
 }
 
 # DocType Class
@@ -154,6 +155,8 @@ scheduler_events = {
 		"sabaintegration.sabaintegration.doctype.sales_order_payment.sales_order_payment.set_payment_for_quarter"
 	]
 }
+
+#after_migrate = ["sabaintegration.www.api.indexing_after_migrate"]
 
 # Testing
 # -------

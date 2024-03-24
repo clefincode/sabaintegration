@@ -33,10 +33,18 @@ def quotation_query(user):
     """.format(users=users, roles = strroles)
     return strWhere
 
-def has_permission(doc, user):
+def has_permission(doc, user=None, ptype=None):
     from frappe.permissions import has_permission
-    if doc.event_type == "Public" or doc.owner == user:
-        return True
-    if has_permission("Event", user = user, ptype = "write"):
-        return True
-    return False
+    if doc.doctype == "Event":
+        if doc.event_type == "Public" or doc.owner == user:
+            return True
+        if has_permission("Event", user = user, ptype = "write"):
+            return True
+        return False
+    if doc.doctype == "Quotation" and ptype == "write":
+        if doc.opportunity_owner == frappe.session.user:
+            return True
+        elif any(role in frappe.get_roles() for role in ['Sales Manager', 'System Manager', '0 Selling - Quotation Creation (Can view All)', '0 Selling - Quotation Admin']):
+            return True
+        return False
+
