@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 import frappe
 from datetime import datetime
 from six import string_types
@@ -10,12 +11,47 @@ from frappe.contacts.doctype.address.address import get_company_address
 from erpnext.stock.doctype.item.item import get_item_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from erpnext.selling.doctype.sales_order.sales_order import SalesOrder, make_project
-
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+	validate_inter_company_party,
+)
 from sabaintegration.sabaintegration.doctype.sales_order_payment.sales_order_payment import get_quarter
 
 class CustomSalesOrder(SalesOrder):
     def validate(self):
-        super(CustomSalesOrder, self).validate()
+        super(SalesOrder, self).validate()
+        self.validate_delivery_date()
+        self.validate_proj_cust()
+        self.validate_po()
+        self.validate_uom_is_integer("stock_uom", "stock_qty")
+        self.validate_uom_is_integer("uom", "qty")
+        self.validate_for_items()
+        self.validate_warehouse()
+        self.validate_drop_ship()
+        self.validate_serial_no_based_delivery()
+        validate_inter_company_party(
+            self.doctype, self.customer, self.company, self.inter_company_order_reference
+        )
+
+        if self.coupon_code:
+            from erpnext.accounts.doctype.pricing_rule.utils import validate_coupon_code
+
+            validate_coupon_code(self.coupon_code)
+
+        make_packing_list(self)
+
+        self.validate_with_previous_doc()
+        self.set_status()
+
+        if not self.billing_status:
+            self.billing_status = "Not Billed"
+        if not self.delivery_status:
+            self.delivery_status = "Not Delivered"
+
+        self.reset_default_field_value("set_warehouse", "items", "warehouse")
+    
+        self.custom_validate()
+
+    def custom_validate(self):
         self.update_total_margin()
         self.update_costs()
         self.validate_commission()
@@ -39,10 +75,19 @@ class CustomSalesOrder(SalesOrder):
 
     def update_total_margin(self):
         self.total = self.total_rate_without_margin = self.base_total_rate_without_margin = 0
+        margins = {}
         for item in self.items:
             item.base_rate_without_profit_margin = item.rate_without_profit_margin * self.conversion_rate
             self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
             self.total += flt(item.amount, item.precision("amount"))
+            margins[item.name] = item.margin_from_supplier_quotation
+        
+        if self.get("packed_items"):
+            for item in self.packed_items:
+                item.rate_before_margin = item.rate_before_margin or 0
+                if item.rate_before_margin:
+                    item.rate = item.rate_before_margin * margins[item.parent_detail_docname] / 100 + item.rate_before_margin
+                    item.margin = margins[item.parent_detail_docname]
         self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
         self.base_total = self.total * self.conversion_rate
 
@@ -156,37 +201,61 @@ class CustomSalesOrder(SalesOrder):
                 items_before_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.get_doc_before_save().items]
                 items_after_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.items]
                 if items_before_save == items_after_save:
-                    toset = False
+                    if self.get("packed_items"):
+                        items_before_save = [{"item_code": i.item_code, "parent_item": i.parent_item, "rate": i.rate, "rate_before_margin": i.rate_before_margin} for i in self.get_doc_before_save().packed_items]
+                        items_after_save = [{"item_code": i.item_code, "parent_item": i.parent_item, "rate": i.rate, "rate_before_margin": i.rate_before_margin} for i in self.packed_items]
+                        if items_before_save == items_after_save:
+                            toset = False
+                    else:
+                        toset = False
         
         if not toset: return
 
         self.brands, brands = [], {}
         # Get the Brands Set
         for item in self.items:
-            # if frappe.db.get_value("Item", item.item_code, "is_stock_item"):
-            #     continue
+            if not frappe.db.get_value("Item", item.item_code, "is_stock_item"):
+                continue
             brand = frappe.db.get_value("Item", item.item_code, "brand")
             if not brand: brand = "Unknown"
             if not brands.get(brand):
                 if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-                    brands[brand] = (item.base_amount, item.base_rate, item.amount, item.rate)
+                    brands[brand] = (item.base_amount, item.base_rate * item.qty, item.amount, item.rate * item.qty)
                 else: brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
             else: 
                 if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-                    brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + item.base_rate, brands[brand][2] + item.amount, brands[brand][3] + item.rate)
+                    brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.base_rate * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.rate * item.qty))
                 else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
 
-        # for p_item in self.get("packed_items"):
-        #     brand = p_item.brand or frappe.db.get_value("Item", p_item.item_code, "brand")
-        #     if not brand: brand = "Unknown"
-        #     if not brands.get(brand):
-        #         if p_item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-        #             brands[brand] = (item.base_amount, item.base_rate, item.amount, item.rate)
-        #         else: brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
-        #     else: 
-        #         if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-        #             brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + item.base_rate, brands[brand][2] + item.amount, brands[brand][3] + item.rate)
-        #         else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
+        for item in self.get("packed_items"):
+            brand = frappe.db.get_value("Item", item.item_code, "brand")
+            item.margin = item.margin or 0
+            item.rate_before_margin = item.rate_before_margin or 0
+            if not brand: brand = "Unknown"
+            if not brands.get(brand):
+                if item.rate_before_margin == 0 and item.rate > 0:
+                    brands[brand] = (
+                        (item.rate * item.qty) * self.conversion_rate, 
+                        item.rate * self.conversion_rate, 
+                        item.rate * item.qty, 
+                        item.rate)
+                else: brands[brand] = (
+                    (item.rate * item.qty) * self.conversion_rate, 
+                    item.margin / 100 * item.rate_before_margin * item.qty * self.conversion_rate, 
+                    item.rate * item.qty, 
+                    item.margin / 100 * item.rate_before_margin * item.qty)
+            else: 
+                if item.rate_before_margin == 0 and item.rate > 0:
+                    brands[brand] = (
+                        brands[brand][0] + (item.rate * item.qty * self.conversion_rate),
+                        brands[brand][1] + (item.rate * self.conversion_rate), 
+                        brands[brand][2] + (item.rate * item.qty), 
+                        brands[brand][3] + item.rate)
+                else: brands[brand] = (
+                    brands[brand][0] + (item.rate * item.qty * self.conversion_rate), 
+                    brands[brand][1] + (item.margin / 100 * item.rate_before_margin * item.qty * self.conversion_rate), 
+                    brands[brand][2] + item.rate * item.qty, 
+                    brands[brand][3] + (item.margin / 100 * item.rate_before_margin * item.qty))
 
         quarter = "Q" + str(get_quarter(today_qq[0]))
         if frappe.db.exists("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1}):
@@ -496,3 +565,89 @@ def get_engineer(doctype, txt, searchfield, start, page_len, filters):
             WHERE enabled = 1 AND (name like '%{txt}%' or employee like '%{txt}%')
             order by name
             """)
+
+def make_packing_list(doc):
+    "Make/Update packing list for Product Bundle Item."
+    from erpnext.stock.doctype.packed_item.packed_item import (
+        is_product_bundle,
+        get_indexed_packed_items_table,
+        reset_packing_list,
+        get_product_bundle_items,
+        get_packed_item_details,
+        set_product_bundle_rate_amount,
+        update_product_bundle_rate,
+        update_packed_item_from_cancelled_doc,
+        update_packed_item_price_data,
+        update_packed_item_stock_data,
+        update_packed_item_basic_data
+    )
+    if doc.get("_action") and doc._action == "update_after_submit":
+        return
+
+    parent_items_price, reset = {}, False
+    set_price_from_children = frappe.db.get_single_value(
+        "Selling Settings", "editable_bundle_item_rates"
+    )
+
+    stale_packed_items_table = get_indexed_packed_items_table(doc)
+
+    packed_items = deepcopy(doc.get("packed_items"))
+
+    reset = reset_packing_list(doc)
+
+    for item_row in doc.get("items"):
+        if is_product_bundle(item_row.item_code):
+            for bundle_item in get_product_bundle_items(item_row.item_code):
+                pi_row = add_packed_item_row(
+                    doc=doc,
+                    packing_item=bundle_item,
+                    main_item_row=item_row,
+                    packed_items_table=stale_packed_items_table,
+                    reset=reset,
+                    packed_items = packed_items
+                )
+                item_data = get_packed_item_details(bundle_item.item_code, doc.company)
+                update_packed_item_basic_data(item_row, pi_row, bundle_item, item_data)
+                update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, doc)
+                update_packed_item_price_data(pi_row, item_data, doc)
+                update_packed_item_from_cancelled_doc(item_row, bundle_item, pi_row, doc)
+
+                if set_price_from_children:  # create/update bundle item wise price dict
+                    update_product_bundle_rate(parent_items_price, pi_row, item_row)
+
+    if parent_items_price:
+        set_product_bundle_rate_amount(doc, parent_items_price)  # set price in bundle item
+
+
+def add_packed_item_row(doc, packing_item, main_item_row, packed_items_table, reset, packed_items):
+    """Add and return packed item row.
+    doc: Transaction document
+    packing_item (dict): Packed Item details
+    main_item_row (dict): Items table row corresponding to packed item
+    packed_items_table (dict): Packed Items table before save (indexed)
+    reset (bool): State if table is reset or preserved as is
+    """
+    exists, pi_row = False, {}
+
+    # check if row already exists in packed items table
+    key = (main_item_row.item_code, packing_item.item_code, main_item_row.name)
+    if packed_items_table.get(key):
+        pi_row, exists = packed_items_table.get(key), True
+
+    if not exists:
+        if packed_items:
+            for packed_item in packed_items:
+                if packed_item.parent_item == main_item_row.item_code and\
+                packed_item.item_code == packing_item.item_code and\
+                packed_item.section_title == main_item_row.section_title:
+                    pi_row, exists = packed_item, True
+                    exists = True
+                    break
+
+    if not exists:
+        pi_row = doc.append("packed_items", {})
+    elif reset:  # add row if row exists but table is reset
+        pi_row.idx, pi_row.name = None, None
+        pi_row = doc.append("packed_items", pi_row)
+
+    return pi_row

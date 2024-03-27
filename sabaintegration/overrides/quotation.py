@@ -113,10 +113,19 @@ class CustomQuotation(Quotation):
 
 	def update_total_margin(self):
 		self.total, self.total_rate_without_margin, self.base_total_rate_without_margin = 0, 0, 0
+		margins = {}
 		for item in self.items:
 			item.base_rate_without_profit_margin = item.rate_without_profit_margin * self.conversion_rate
 			self.total_rate_without_margin = self.total_rate_without_margin + flt(item.rate_without_profit_margin * item.qty, item.precision("rate_without_profit_margin"))
 			self.total += flt(item.amount, item.precision("amount"))
+			margins[item.name] = item.margin_from_supplier_quotation
+        
+		if self.get("packed_items"):
+			for item in self.packed_items:
+				item.rate_before_margin = item.rate_before_margin or 0
+				if item.rate_before_margin:
+					item.rate = item.rate_before_margin * margins[item.parent_detail_docname] / 100 + item.rate_before_margin
+					item.margin = margins[item.parent_detail_docname]
 		self.base_total_rate_without_markup = self.total_rate_without_margin * self.conversion_rate
 		self.base_total = self.total * self.conversion_rate
 
@@ -322,7 +331,10 @@ def make_packing_list(doc):
 				update_packed_item_stock_data(item_row, pi_row, bundle_item, item_data, doc)
 				update_packed_item_price_data(pi_row, item_data, doc)
 				update_packed_item_from_cancelled_doc(item_row, bundle_item, pi_row, doc)
-				pi_row.rate_before_margin = pi_row.rate if not pi_row.get("margin") else pi_row.rate / (pi_row.get('margin') - 1)
+				pi_row.section_title = item_row.section_title
+				pi_row.margin = item_row.margin_from_supplier_quotation if not pi_row.margin else pi_row.margin
+				if not pi_row.rate_before_margin:
+					pi_row.rate_before_margin = pi_row.rate if not pi_row.get("margin") else pi_row.rate / (pi_row.get('margin') - 1)
 
 				if set_price_from_children:  # create/update bundle item wise price dict
 					update_product_bundle_rate(parent_items_price, pi_row)
