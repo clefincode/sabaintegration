@@ -46,5 +46,4 @@ def has_permission(doc, user=None, ptype=None):
             return True
         elif any(role in frappe.get_roles() for role in ['Sales Manager', 'System Manager', '0 Selling - Quotation Creation (Can view All)', '0 Selling - Quotation Admin']):
             return True
-        return False
 
