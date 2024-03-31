@@ -23,8 +23,21 @@ def set_payment_for_quarter():
 	current_month = datetime.now().month
     
 	if current_month in [1, 4, 7, 10]:
-		quarter = get_quarter(current_month)
-		set_payment(quarter, datetime.now().year)
+		quarter = get_previous_quarter(current_month)
+		year = datetime.now().year - 1 if quarter == 4 else datetime.now().year
+		set_payment(quarter,year)
+
+def get_previous_quarter(month):
+    if month in [1, 2, 3]:
+        return 4
+    elif month in [4, 5, 6]:
+        return 1
+    elif month in [7, 8, 9]:
+        return 2
+    elif month in [10, 11, 12]:
+        return 3
+    else:
+        return "Invalid month"
 
 def get_quarter(month):
     if month in [1, 2, 3]:
