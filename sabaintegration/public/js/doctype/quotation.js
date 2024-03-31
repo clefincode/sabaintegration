@@ -155,9 +155,7 @@ frappe.ui.form.on('Quotation', {
 
 	},
 	conversion_rate: async function(frm){
-		frappe.dom.freeze();
-		await frm.events.set_rates_without_margin(frm)
-		frappe.dom.unfreeze();
+		frm.events.set_rates_without_margin(frm)
 	},
 	currency: function(frm){
 		for (let i of frm.doc.items){
@@ -437,7 +435,7 @@ frappe.ui.form.on('Quotation Item', {
 	},
 	items_remove: function(frm){
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	},
 	margin_from_supplier_quotation: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
@@ -456,7 +454,7 @@ frappe.ui.form.on('Quotation Item', {
 			d.margin_type = '';
 			d.margin_rate_or_amount = 0;
 		}
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	},
 	price_list_rate: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
@@ -480,7 +478,7 @@ frappe.ui.form.on('Quotation Item', {
 		else
 			d.margin_from_supplier_quotation = 0
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, false);
 	},
 	from_buying_price_list: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
@@ -501,7 +499,7 @@ frappe.ui.form.on('Quotation Item', {
 		}
 		else {
 			sabaintegration.set_total_without_margin(frm);
-			sabaintegration.calculate_total_margin(frm);
+			sabaintegration.calculate_total_margin(frm, true);
 		}
 
 	},
@@ -510,7 +508,7 @@ frappe.ui.form.on('Quotation Item', {
 		var margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
 		d.margin_from_supplier_quotation = margin_from_supplier_quotation;
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	}
 	
 
@@ -565,7 +563,7 @@ const check_change_qty = async function(frm, d){
 							let packed_items = await get_packed_items(frm, d);
 							if (packed_items) update_packed_items_qty(frm, packed_items.items, d)					
 							sabaintegration.set_total_without_margin(frm);
-							sabaintegration.calculate_total_margin(frm);
+							sabaintegration.calculate_total_margin(frm, true);
 							frappe.dom.unfreeze();
 						}, 2000)
 					},
@@ -579,7 +577,7 @@ const check_change_qty = async function(frm, d){
 						let packed_items = await get_packed_items(frm, d);
 						if (packed_items) update_packed_items_qty(frm, packed_items, d)	
 						sabaintegration.set_total_without_margin(frm);
-						sabaintegration.calculate_total_margin(frm);
+						sabaintegration.calculate_total_margin(frm, true);
 						frappe.dom.unfreeze();
 					}, 2000)
 				}

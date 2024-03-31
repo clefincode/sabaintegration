@@ -409,7 +409,7 @@ frappe.ui.form.on('Sales Order Item', {
 	},
 	items_remove: function(frm){
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	},
 	margin_from_supplier_quotation: function(frm,cdt,cdn){
 		var d = locals[cdt][cdn];
@@ -428,7 +428,7 @@ frappe.ui.form.on('Sales Order Item', {
 			d.margin_type = '';
 			d.margin_rate_or_amount = 0;
 		}
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	},
 	price_list_rate: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
@@ -452,7 +452,7 @@ frappe.ui.form.on('Sales Order Item', {
 		else
 			d.margin_from_supplier_quotation = 0
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, false);
 	},
 	from_buying_price_list: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
@@ -468,14 +468,14 @@ frappe.ui.form.on('Sales Order Item', {
 	},
 	qty: function(frm, cdt, cdn){
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);		
+		sabaintegration.calculate_total_margin(frm, true);		
 	},
 	rate_without_profit_margin: function(frm, cdt, cdn){
 		var d = locals[cdt][cdn];
 		var margin_from_supplier_quotation = (d.rate - d.rate_without_profit_margin) / d.rate_without_profit_margin * 100 
 		d.margin_from_supplier_quotation = margin_from_supplier_quotation;
 		sabaintegration.set_total_without_margin(frm);
-		sabaintegration.calculate_total_margin(frm);
+		sabaintegration.calculate_total_margin(frm, true);
 	}
 })
 frappe.ui.form.on('Cost', {

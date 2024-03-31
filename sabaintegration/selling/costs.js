@@ -11,8 +11,11 @@ $.extend(sabaintegration, {
 		frm.refresh_field("total_rate_without_margin");
 
 	},
-    calculate_total_margin: function(frm){
-		cur_frm.cscript.calculate_taxes_and_totals();
+    calculate_total_margin: function(frm, set_taxes = true){
+        if (set_taxes){
+            cur_frm.cscript.calculate_taxes_and_totals();
+        }
+		   
 		frm.doc.total_margin = (frm.doc.total - frm.doc.total_rate_without_margin) / frm.doc.total_rate_without_margin * 100;
 		frm.doc.total_items_markup_value = frm.doc.total - frm.doc.total_rate_without_margin
 		frm.doc.base_total_items_markup_value = frm.doc.total_items_markup_value * frm.doc.conversion_rate;
