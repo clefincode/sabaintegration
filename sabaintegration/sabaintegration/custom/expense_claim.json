@@ -952,7 +952,7 @@
    "role": "0 HR - Expense Claim",
    "select": 0,
    "set_user_permissions": 0,
-   "share": 0,
+   "share": 1,
    "submit": 0,
    "user_permission_doctypes": null,
    "write": 1
