@@ -12,7 +12,7 @@ from erpnext.stock.doctype.item.item import get_item_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from erpnext.selling.doctype.sales_order.sales_order import SalesOrder, make_project
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
-	validate_inter_company_party,
+    validate_inter_company_party,
 )
 from sabaintegration.sabaintegration.doctype.sales_order_payment.sales_order_payment import get_quarter
 
@@ -116,7 +116,8 @@ class CustomSalesOrder(SalesOrder):
 
     # def on_submit(self):
     #     super(CustomSalesOrder, self).on_submit()
-    #     self.create_project_automatically()
+    # #     self.create_project_automatically()
+    #     create_sales_qtys(self)
 
     def create_project_automatically(self):
         if self.project: return
@@ -197,7 +198,8 @@ class CustomSalesOrder(SalesOrder):
             # Then Check if the Table Needs to be Updated
             if before_save_qq == today_qq and \
             self.get_doc_before_save().conversion_rate == self.conversion_rate and \
-            self.get_doc_before_save().currency == self.currency:
+            self.get_doc_before_save().currency == self.currency and \
+            self.base_total_costs == self.get_doc_before_save().base_total_costs:
                 items_before_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.get_doc_before_save().items]
                 items_after_save = [{"item_code": i.item_code, "base_amount": i.base_amount, "margin": i.margin_from_supplier_quotation} for i in self.items]
                 if items_before_save == items_after_save:
@@ -219,13 +221,13 @@ class CustomSalesOrder(SalesOrder):
             brand = frappe.db.get_value("Item", item.item_code, "brand")
             if not brand: brand = "Unknown"
             if not brands.get(brand):
-                if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-                    brands[brand] = (item.base_amount, item.base_rate * item.qty, item.amount, item.rate * item.qty)
-                else: brands[brand] = (item.base_amount, item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty, item.amount, item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty)
+                brands[brand] = (
+                    item.base_net_amount, 
+                    item.net_amount)
             else: 
-                if item.base_rate_without_profit_margin == 0 and item.base_rate > 0:
-                    brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.base_rate * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.rate * item.qty))
-                else: brands[brand] = (brands[brand][0] + item.base_amount, brands[brand][1] + (item.margin_from_supplier_quotation / 100 * item.base_rate_without_profit_margin * item.qty), brands[brand][2] + item.amount, brands[brand][3] + (item.margin_from_supplier_quotation / 100 * item.rate_without_profit_margin * item.qty))
+                brands[brand] = (
+                    brands[brand][0] + item.base_net_amount, 
+                    brands[brand][1] + item.net_amount)
 
         for item in self.get("packed_items"):
             brand = frappe.db.get_value("Item", item.item_code, "brand")
@@ -233,29 +235,13 @@ class CustomSalesOrder(SalesOrder):
             item.rate_before_margin = item.rate_before_margin or 0
             if not brand: brand = "Unknown"
             if not brands.get(brand):
-                if item.rate_before_margin == 0 and item.rate > 0:
-                    brands[brand] = (
-                        (item.rate * item.qty) * self.conversion_rate, 
-                        item.rate * self.conversion_rate, 
-                        item.rate * item.qty, 
-                        item.rate)
-                else: brands[brand] = (
+                brands[brand] = (
                     (item.rate * item.qty) * self.conversion_rate, 
-                    item.margin / 100 * item.rate_before_margin * item.qty * self.conversion_rate, 
-                    item.rate * item.qty, 
-                    item.margin / 100 * item.rate_before_margin * item.qty)
+                    item.rate * item.qty)
             else: 
-                if item.rate_before_margin == 0 and item.rate > 0:
-                    brands[brand] = (
-                        brands[brand][0] + (item.rate * item.qty * self.conversion_rate),
-                        brands[brand][1] + (item.rate * self.conversion_rate), 
-                        brands[brand][2] + (item.rate * item.qty), 
-                        brands[brand][3] + item.rate)
-                else: brands[brand] = (
-                    brands[brand][0] + (item.rate * item.qty * self.conversion_rate), 
-                    brands[brand][1] + (item.margin / 100 * item.rate_before_margin * item.qty * self.conversion_rate), 
-                    brands[brand][2] + item.rate * item.qty, 
-                    brands[brand][3] + (item.margin / 100 * item.rate_before_margin * item.qty))
+                brands[brand] = (
+                    brands[brand][0] + (item.rate * item.qty * self.conversion_rate),
+                    brands[brand][1] + (item.rate * item.qty))
 
         quarter = "Q" + str(get_quarter(today_qq[0]))
         if frappe.db.exists("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1}):
@@ -272,8 +258,8 @@ class CustomSalesOrder(SalesOrder):
                             "incentive_percentage": row.incentive_percentage,
                             # "selling_amount": brands[brand][0],
                             # "selling_amount_in_order_currency": brands[brand][2],
-                            "total_quota": brands[brand][1],
-                            "total_quota_in_order_currency": brands[brand][3]
+                            "total_quota": brands[brand][0] * self.expected_profit_loss / 100,
+                            "total_quota_in_order_currency": brands[brand][1] * self.expected_profit_loss / 100
                         }))
                         found = True
                         qq.brands.remove(row)
@@ -651,3 +637,125 @@ def add_packed_item_row(doc, packing_item, main_item_row, packed_items_table, re
         pi_row = doc.append("packed_items", pi_row)
 
     return pi_row
+
+@frappe.whitelist()
+def make_sales_order(sales_order, items):
+    if frappe.db.exists("Delivery Note Item", {"against_sales_order": sales_order, "docstatus": 1}):
+        frappe.throw("You can't update the qtys after creating a Delivery Note")
+
+    if isinstance(items, string_types):
+        items = json.loads(items)
+
+    old_doc = frappe.get_doc("Sales Order", sales_order)
+    new_doc = frappe.copy_doc(old_doc)
+    new_doc.amended_from = old_doc.name
+
+    for item in items:
+        for row in new_doc.items:
+            if not row.get("section_title"):
+                row.section_title = ""
+
+            if not item.get("section_title"):
+                item["section_title"] = ""
+
+            if row.item_code == item["item_code"] and row.get("section_title") == item.get("section_title"):
+
+                row.qty = item["qty"]
+                row.amount = row.qty * row.rate
+                break  
+    
+    # linked_docs = get_linked_doc(old_doc)
+    # unlink_docs(old_doc, linked_docs)
+    old_doc.cancel()
+    new_doc.insert()
+    frappe.db.commit()
+    return new_doc
+
+def get_linked_doc(doc):
+    from frappe.model.rename_doc import get_link_fields
+    linked_docs = {}
+    link_fields = get_link_fields(doc.doctype)
+
+    ignore_linked_doctypes = doc.get("ignore_linked_doctypes") or []
+
+    for lf in link_fields:
+        link_dt, link_field, issingle = lf["parent"], lf["fieldname"], lf["issingle"]
+
+        if not issingle:
+            fields = ["name", "docstatus"]
+            if frappe.get_meta(link_dt).istable:
+                fields.extend(["parent", "parenttype"])
+
+            for item in frappe.db.get_values(link_dt, {link_field: doc.name}, fields, as_dict=True):
+                # available only in child table cases
+                item_parent = getattr(item, "parent", None)
+                linked_doctype = item.parenttype if item_parent else link_dt
+
+                if linked_doctype in frappe.get_hooks("ignore_links_on_delete") or (
+                    linked_doctype in ignore_linked_doctypes
+                ):
+                    # don't check for communication and todo!
+                    continue
+
+                if item.docstatus != 1:
+                    continue
+                elif link_dt == doc.doctype and (item_parent or item.name) == doc.name:
+                    # don't raise exception if not
+                    # linked to same item or doc having same name as the item
+                    continue
+                else:
+                    reference_docname = item_parent or item.name
+                    linked_docs[reference_docname] = linked_doctype
+
+
+        else:
+            if frappe.db.get_value(link_dt, None, link_field) == doc.name:
+                linked_docs[link_dt] = link_dt
+
+    return linked_docs
+
+def unlink_docs(doc, linked_docs):
+    for linked_doc in linked_docs:
+        if linked_docs[linked_doc] not in ['Material Request', 'Purchase Order']:
+            frappe.throw("Cannot delete or cancel because Sales Order {0} is linked with {1} {2}".format(doc.name, linked_docs[linked_doc], linked_doc))
+
+        d = frappe.get_doc(linked_docs[linked_doc], linked_doc)
+        for i in d.items:
+            if i.get("sales_order") == doc.name:
+                i.db_set("sales_order", None)
+
+
+def create_sales_qtys(doc):
+    """Create a Sales Order Qtys document for recording 
+    the details of items qty in each sales order"""
+
+    soq = frappe.new_doc("Sales Order Qtys")
+
+    # Add stock items to the new doc table
+    for item in doc.items:
+        if not frappe.db.get_value("Item", item.item_code, "is_stock_item"):
+            continue
+
+        soq.append("items", {
+            "item_code": item.item_code,
+            "so_detail": item.name,
+            "required_qty": item.qty
+        })
+
+    # Add packed items to the new doc table if exists
+    if doc.get("packed_items"):
+        for item in doc.items:
+            soq.append("items", {
+                "item_code": item.item_code,
+                "pi_detail": item.name,
+                "required_qty": item.qty,
+                "parent_item": item.parent_item,
+                "so_detail": item.parent_detail_docname
+            })
+
+    soq.update({
+        "sales_order": doc.name,
+        "project": doc.get("project")
+    })
+
+    soq.insert(ignore_permissions = True)
