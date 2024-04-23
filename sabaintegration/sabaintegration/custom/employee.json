@@ -1346,7 +1346,7 @@
    "cancel": 0,
    "create": 1,
    "creation": "2015-12-31 16:24:51.532156",
-   "delete": 0,
+   "delete": 1,
    "docstatus": 0,
    "email": 0,
    "export": 1,
