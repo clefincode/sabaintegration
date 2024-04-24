@@ -861,7 +861,7 @@
    "email": 0,
    "export": 1,
    "idx": 0,
-   "if_owner": 0,
+   "if_owner": 1,
    "import": 0,
    "modified": "2024-04-22 17:59:45.253568",
    "modified_by": "a.sherif@saba-eg.com",
