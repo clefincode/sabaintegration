@@ -688,7 +688,7 @@ def update_sales_orders_brands(year, quarter):
 		select name from `tabSales Order` as so
 		where so.docstatus = 1 and so.submitting_date != '' and so.submitting_date is not null
 		and EXTRACT(YEAR FROM so.submitting_date) = '{year}'
-		and CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0) = '{quarter}'
+		and CONCAT('Q', CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0)) = '{quarter}'
 	"""
 	docs = frappe.db.sql(strQuery, as_list = 1)
 	for d in docs:
@@ -699,4 +699,13 @@ def update_sales_orders_brands(year, quarter):
 
 	frappe.db.commit()
 
-	return docs
+	return len(docs)
+
+def indexing_after_migrate():
+	if not frappe.db.has_index('tabNotification Log', 'idx_for_user_modified'):
+		frappe.db.sql_ddl("""
+			CREATE INDEX idx_for_user_modified 
+			ON `tabNotification Log`(for_user, modified DESC);
+		""")
+
+		frappe.db.commit()

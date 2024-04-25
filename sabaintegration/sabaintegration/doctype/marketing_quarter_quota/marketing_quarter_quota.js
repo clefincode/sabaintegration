@@ -12,6 +12,30 @@ frappe.ui.form.on('Marketing Quarter Quota', {
 			frm.toggle_display('leaders', false);
 		}
 		else frm.toggle_display('leaders', true);
+
+		if (frm.doc.docstatus == 1){
+			frm.add_custom_button(__("Update Sales Order"), function() {
+				frm.events.update_sales_order(frm);
+			});
+		}
+	},
+	update_sales_order: function(frm){
+		frm.call({
+			"method": "sabaintegration.www.api.update_sales_orders_brands",
+			"args": {
+				"year": frm.doc.year,
+				"quarter": frm.doc.quarter
+			},
+			freeze: true,
+			callback: function(r){
+				if (r.message){
+					frappe.msgprint(`Updates Sales Order: ${r.message}`)
+				}
+				else{
+					frappe.msgprint("No Sales Orders to Update")
+				}
+			}
+		})
 	},
 	year: function(frm){
 		if (!frm.doc.brands) return

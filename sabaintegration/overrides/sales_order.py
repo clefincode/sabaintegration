@@ -216,7 +216,7 @@ class CustomSalesOrder(SalesOrder):
         self.brands, brands = [], {}
         # Get the Brands Set
         for item in self.items:
-            if not frappe.db.get_value("Item", item.item_code, "is_stock_item"):
+            if not frappe.db.get_value("Item", item.item_code, "is_stock_item") and frappe.db.get_value("Item", item.item_code, "is_a_parent_bundle"):
                 continue
             brand = frappe.db.get_value("Item", item.item_code, "brand")
             if not brand: brand = "Unknown"
@@ -233,7 +233,7 @@ class CustomSalesOrder(SalesOrder):
             brand = frappe.db.get_value("Item", item.item_code, "brand")
             item.margin = item.margin or 0
             item.rate_before_margin = item.rate_before_margin or 0
-            if not brand: brand = "Unknown"
+            if not brand: brand = "No Brand"
             if not brands.get(brand):
                 brands[brand] = (
                     (item.rate * item.qty) * self.conversion_rate, 
@@ -247,6 +247,11 @@ class CustomSalesOrder(SalesOrder):
         if frappe.db.exists("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1}):
             # Assign Each Brand with its Product Manager
             qq = frappe.get_doc("Marketing Quarter Quota", {"year": today_qq[1], "quarter": quarter, "docstatus": 1})   
+            no_brand_row= None
+            for row in qq.brands:
+                if row.brand == "No Brand":
+                    no_brand_row = row
+
             for brand in brands:
                 found = False
                 for row in qq.brands:
@@ -266,7 +271,19 @@ class CustomSalesOrder(SalesOrder):
                         break
                 
                 if not found:
-                    frappe.msgprint("Be Careful! Brand <b>{}</b> has no an associated Product Manager for it. So it's not added to the Marketing Table". format(brand))
+                    if no_brand_row:
+                        self.append("brands", frappe._dict({
+                        "product_manager": no_brand_row.product_manager,
+                        "brand": "No Brand",
+                        "kpi": no_brand_row.kpi,
+                        "incentive_percentage": no_brand_row.incentive_percentage,
+                        # "selling_amount": brands[brand][0],
+                        # "selling_amount_in_order_currency": brands[brand][2],
+                        "total_quota": brands[brand][0] * self.expected_profit_loss / 100,
+                        "total_quota_in_order_currency": brands[brand][1] * self.expected_profit_loss / 100
+                    }))
+                    else:
+                        frappe.msgprint("Be Careful! Brand <b>{}</b> has no an associated Product Manager for it. So it's not added to the Marketing Table". format(brand))
         else:
             frappe.msgprint("Be Careful! Marketing Table can't be updated because there is no submitted Marketing Quarter Quota for the current Quarter")
 
@@ -664,65 +681,10 @@ def make_sales_order(sales_order, items):
                 row.amount = row.qty * row.rate
                 break  
     
-    # linked_docs = get_linked_doc(old_doc)
-    # unlink_docs(old_doc, linked_docs)
     old_doc.cancel()
     new_doc.insert()
     frappe.db.commit()
     return new_doc
-
-def get_linked_doc(doc):
-    from frappe.model.rename_doc import get_link_fields
-    linked_docs = {}
-    link_fields = get_link_fields(doc.doctype)
-
-    ignore_linked_doctypes = doc.get("ignore_linked_doctypes") or []
-
-    for lf in link_fields:
-        link_dt, link_field, issingle = lf["parent"], lf["fieldname"], lf["issingle"]
-
-        if not issingle:
-            fields = ["name", "docstatus"]
-            if frappe.get_meta(link_dt).istable:
-                fields.extend(["parent", "parenttype"])
-
-            for item in frappe.db.get_values(link_dt, {link_field: doc.name}, fields, as_dict=True):
-                # available only in child table cases
-                item_parent = getattr(item, "parent", None)
-                linked_doctype = item.parenttype if item_parent else link_dt
-
-                if linked_doctype in frappe.get_hooks("ignore_links_on_delete") or (
-                    linked_doctype in ignore_linked_doctypes
-                ):
-                    # don't check for communication and todo!
-                    continue
-
-                if item.docstatus != 1:
-                    continue
-                elif link_dt == doc.doctype and (item_parent or item.name) == doc.name:
-                    # don't raise exception if not
-                    # linked to same item or doc having same name as the item
-                    continue
-                else:
-                    reference_docname = item_parent or item.name
-                    linked_docs[reference_docname] = linked_doctype
-
-
-        else:
-            if frappe.db.get_value(link_dt, None, link_field) == doc.name:
-                linked_docs[link_dt] = link_dt
-
-    return linked_docs
-
-def unlink_docs(doc, linked_docs):
-    for linked_doc in linked_docs:
-        if linked_docs[linked_doc] not in ['Material Request', 'Purchase Order']:
-            frappe.throw("Cannot delete or cancel because Sales Order {0} is linked with {1} {2}".format(doc.name, linked_docs[linked_doc], linked_doc))
-
-        d = frappe.get_doc(linked_docs[linked_doc], linked_doc)
-        for i in d.items:
-            if i.get("sales_order") == doc.name:
-                i.db_set("sales_order", None)
 
 
 def create_sales_qtys(doc):
