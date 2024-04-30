@@ -1,5 +1,5 @@
 {
- "add_total_row": 0,
+ "add_total_row": 1,
  "columns": [],
  "creation": "2023-08-22 13:50:43.001248",
  "disable_prepared_report": 0,
@@ -10,7 +10,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": "SABA Default",
- "modified": "2023-08-22 13:50:43.001248",
+ "modified": "2024-04-30 12:06:16.735166",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Sales Commission to be Paid",
@@ -30,7 +30,7 @@
    "role": "0 Selling - Sales Order Viewing"
   },
   {
-   "role": "0 Selling - Sales Order Submitting"
+   "role": "0 Selling - Sales Order Submitting (If Owner)"
   },
   {
    "role": "0 Selling - Sales Order Creation"

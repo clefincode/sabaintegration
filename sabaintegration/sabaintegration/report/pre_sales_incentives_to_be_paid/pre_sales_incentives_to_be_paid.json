@@ -1,5 +1,5 @@
 {
- "add_total_row": 0,
+ "add_total_row": 1,
  "columns": [],
  "creation": "2023-12-22 12:26:15.715081",
  "disable_prepared_report": 0,
@@ -10,7 +10,7 @@
  "idx": 0,
  "is_standard": "Yes",
  "letter_head": "SABA Default",
- "modified": "2023-12-22 12:26:15.715081",
+ "modified": "2024-04-30 12:55:42.926639",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Pre-Sales Incentives to be Paid",
@@ -30,7 +30,7 @@
    "role": "0 Selling - Sales Order Viewing"
   },
   {
-   "role": "0 Selling - Sales Order Submitting"
+   "role": "0 Selling - Sales Order Submitting (If Owner)"
   },
   {
    "role": "0 Selling - Sales Order Creation"
