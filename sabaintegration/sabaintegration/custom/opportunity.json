@@ -6806,7 +6806,7 @@
    "name": "Opportunity-closing_reason",
    "no_copy": 0,
    "non_negative": 0,
-   "options": "\nLack of Relevant Experience\nInadequate Resources or Capacity\nMore Than Customer's Budget\nThe customer was Only Budgeting\nWeak Relations with customer\nNot Within Company's Portfolio\nNo Clear Response from the customer \nCustomer unreachable for 2 month\nOld Opportunity/Testing/No Enough Data\nProject Cancelled\nDisagreement on Terms & Conditions",
+   "options": "\nLack of Relevant Experience\nInadequate Resources or Capacity\nMore Than Customer's Budget\nThe customer was Only Budgeting\nNo Clear Response from the customer\nWeak Relations with customer\nNot Within Company's Portfolio\nCustomer unreachable for 2 month\nOld Opportunity/Testing/No Enough Data\nProject Cancelled\nDisagreement on Terms & Conditions",
    "owner": "Administrator",
    "parent": null,
    "parentfield": null,
