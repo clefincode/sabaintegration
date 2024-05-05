@@ -119,6 +119,15 @@ class CustomSalesOrder(SalesOrder):
     # #     self.create_project_automatically()
     #     create_sales_qtys(self)
 
+    # def before_cancel(self):
+    #     self.cancel_soq()
+
+    # def cancel_soq(self):
+    #     if frappe.db.exists("Sales Order Qtys", self.name):
+    #         doc = frappe.get_doc("Sales Order Qtys", self.name)
+    #         doc.is_cancelled = 1
+    #         doc.save(ignore_permissions=True)
+
     def create_project_automatically(self):
         if self.project: return
 
@@ -219,7 +228,7 @@ class CustomSalesOrder(SalesOrder):
             if not frappe.db.get_value("Item", item.item_code, "is_stock_item") and frappe.db.get_value("Item", item.item_code, "is_a_parent_bundle"):
                 continue
             brand = frappe.db.get_value("Item", item.item_code, "brand")
-            if not brand: brand = "Unknown"
+            if not brand: brand = "No Brand"
             if not brands.get(brand):
                 brands[brand] = (
                     item.base_net_amount, 

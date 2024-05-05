@@ -8,7 +8,10 @@ frappe.provide("sabaintegration.costs")
 
 frappe.ui.form.on("Sales Order", {
 	setup: function(frm) {
-		frm.custom_make_buttons['Bundle Delivery Note'] = 'Bundle Delivery Note'
+		frm.custom_make_buttons = {
+			'Bundle Delivery Note': 'Bundle Delivery Note',
+			'Sales Order': 'Update Qtys'
+		}
 	},
 	onload: function(frm){
 		frm.set_query("primary_sales_man", function() {
@@ -151,6 +154,7 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 					this.frm.add_custom_button(__('Bundle Delivery Note'), () => this.make_bundle_delivery_note(), __('Create'));
 				}
 			}
+			this.frm.add_custom_button(__('Update Qtys'), () => this.update_qtys());
 		}
 	}
 
@@ -309,6 +313,84 @@ erpnext.selling.CustomSalesOrderController = class CustomSalesOrderController ex
 		}
 		dialog.fields_dict.parents_items.grid.refresh();
 	}
+
+	update_qtys(){
+		var me = this;
+		me.setup_items_with_qtys(me, (frm, data) => {
+			frappe.call({
+				method: "sabaintegration.overrides.sales_order.make_sales_order",
+				args: {
+					sales_order: me.frm.doc.name,
+					items: data.new_items
+				},
+				callback: function(r){
+					if(!r.exc) {
+						var doc = frappe.model.sync(r.message);
+						frappe.set_route("Form", r.message.doctype, r.message.name);
+					}
+				}
+			})
+		})
+	}
+	setup_items_with_qtys(me, callback){
+		let items = [];
+		let itemslist = cur_frm.doc.items
+		for (let item in itemslist){
+			items.push(item.item_code)
+		}
+		var fields = [
+			{
+				"label" : "Items",
+				"fieldname": "new_items",
+				"fieldtype": "Table",
+				"reqd": 1,
+				"fields": [
+					{
+					"label" : "Section Title",
+					"fieldname": "section_title",
+					"fieldtype": "Data",
+					"in_list_view": 1
+					},
+					{
+						"label" : "Item",
+						"fieldname": "item_code",
+						"options": "Item",
+						"fieldtype": "Link",
+						"in_list_view": 1,
+						"reqd": 1,
+						"get_query": function() {
+							return {
+								filters: {'name': ["in", items] }
+							}
+						}
+					},
+					{
+						"label" : "Qty",
+						"fieldname": "qty",
+						"fieldtype": "Float",
+						"in_list_view": 1
+					}
+				]
+
+			}
+		]
+		let dialog = frappe.prompt(fields, data => {
+			callback(me, data);
+		})
+		let i = 1;
+		dialog.fields_dict.new_items.df.data = [];
+		for (let row of itemslist){
+			dialog.fields_dict.new_items.df.data.push({
+				"idx": i, 
+				"item_code": row.item_code,
+				"section_title": row.section_title,
+				"qty": row.qty
+			});
+			i += 1;
+		}
+		dialog.fields_dict.new_items.grid.refresh();
+	}
+
 	async total_margin(){
 		var me = this;
 		if (me.frm.doc.items){
