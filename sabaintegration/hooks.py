@@ -119,7 +119,9 @@ override_doctype_class = {
     'Delivery Note': 'sabaintegration.overrides.delivery_note.CustomDeliveryNote',
     'Sales Order': 'sabaintegration.overrides.sales_order.CustomSalesOrder',
     'Expense Claim': 'sabaintegration.overrides.expense_claim.CustomExpenseClaim',
-    'Payment Reconciliation': 'sabaintegration.overrides.payment_reconciliation.CustomPaymentReconciliation'
+    'Payment Reconciliation': 'sabaintegration.overrides.payment_reconciliation.CustomPaymentReconciliation',
+    'Purchase Order': 'sabaintegration.overrides.purchase_order.CustomPurchaseOrder',
+    'Purchase Receipt': 'sabaintegration.overrides.purchase_receipt.CustomPurchaseReceipt',
 }
 
 # Document Events

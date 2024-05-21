@@ -1,0 +1,158 @@
+{
+ "actions": [],
+ "creation": "2024-04-07 13:21:46.000228",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_title",
+  "item_code",
+  "parent_item",
+  "column_break_3",
+  "so_detail",
+  "pi_detail",
+  "qtys_section",
+  "required_qty",
+  "reserved_qty",
+  "projected_qty",
+  "column_break_11",
+  "ordered_qty",
+  "remained_qty",
+  "delivered_qty",
+  "references_section",
+  "projected_purchase_orders",
+  "column_break_15",
+  "ordered_purchase_orders",
+  "section_break_19",
+  "is_completed",
+  "is_delivered"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_title",
+   "fieldtype": "Data",
+   "label": "Section Title"
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "so_detail",
+   "fieldtype": "Data",
+   "label": "Sales Order Item"
+  },
+  {
+   "fieldname": "qtys_section",
+   "fieldtype": "Section Break",
+   "label": "Qtys"
+  },
+  {
+   "fieldname": "required_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Required Qty"
+  },
+  {
+   "fieldname": "reserved_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Reserved Qty"
+  },
+  {
+   "fieldname": "projected_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Projected Qty"
+  },
+  {
+   "fieldname": "remained_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Remained Qty"
+  },
+  {
+   "fieldname": "parent_item",
+   "fieldtype": "Link",
+   "label": "Parent Item",
+   "options": "Item"
+  },
+  {
+   "fieldname": "pi_detail",
+   "fieldtype": "Data",
+   "label": "Packed Item"
+  },
+  {
+   "fieldname": "references_section",
+   "fieldtype": "Section Break",
+   "label": "References"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_completed",
+   "fieldtype": "Check",
+   "label": "Is Completed"
+  },
+  {
+   "default": "{\"projected_po\" : []}",
+   "fieldname": "projected_purchase_orders",
+   "fieldtype": "JSON",
+   "label": "Projected Purchase Orders"
+  },
+  {
+   "fieldname": "column_break_15",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "{\"ordered_po\" : []}",
+   "fieldname": "ordered_purchase_orders",
+   "fieldtype": "JSON",
+   "label": "Ordered Purchase Orders"
+  },
+  {
+   "fieldname": "ordered_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Ordered Qty"
+  },
+  {
+   "fieldname": "column_break_11",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "delivered_qty",
+   "fieldtype": "Float",
+   "label": "Delivered Qty"
+  },
+  {
+   "fieldname": "section_break_19",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_delivered",
+   "fieldtype": "Check",
+   "label": "Is Delivered"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-05-16 13:10:56.667466",
+ "modified_by": "Administrator",
+ "module": "Sabaintegration",
+ "name": "Sales Order Qtys Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -108,25 +108,25 @@ class CustomSalesOrder(SalesOrder):
         self.base_total_costs = self.total_costs * self.conversion_rate
         
         self.total_costs_with_material_costs = self.total_costs + self.total_rate_without_margin
-        self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate;
+        self.base_total_costs_with_material_costs = self.total_costs_with_material_costs * self.conversion_rate
 
         self.expected_profit_loss_value = self.net_total - self.total_costs_with_material_costs 
         self.base_expected_profit_loss_value = self.expected_profit_loss_value * self.conversion_rate
         self.expected_profit_loss = (self.expected_profit_loss_value * 100) / self.net_total if self.net_total else 0
 
-    # def on_submit(self):
-    #     super(CustomSalesOrder, self).on_submit()
-    # #     self.create_project_automatically()
-    #     create_sales_qtys(self)
+    def on_submit(self):
+        super(CustomSalesOrder, self).on_submit()
+    #     self.create_project_automatically()
+        create_sales_qtys(self)
 
-    # def before_cancel(self):
-    #     self.cancel_soq()
+    def on_cancel(self):
+        self.cancel_soq()
 
-    # def cancel_soq(self):
-    #     if frappe.db.exists("Sales Order Qtys", self.name):
-    #         doc = frappe.get_doc("Sales Order Qtys", self.name)
-    #         doc.is_cancelled = 1
-    #         doc.save(ignore_permissions=True)
+    def cancel_soq(self):
+        if frappe.db.exists("Sales Order Qtys", self.name):
+            doc = frappe.get_doc("Sales Order Qtys", self.name)
+            doc.is_cancelled = 1
+            doc.save(ignore_permissions=True)
 
     def create_project_automatically(self):
         if self.project: return

@@ -3,6 +3,8 @@ from frappe.utils import cint
 from erpnext.stock.doctype.delivery_note.delivery_note import DeliveryNote
 from erpnext.stock.doctype.batch.batch import set_batch_nos
 
+from sabaintegration.sabaintegration.doctype.sales_order_qtys.sales_order_qtys import get_actual_qty, get_total_reserved_qty
+
 class CustomDeliveryNote(DeliveryNote):
     def validate(self):
         self.validate_posting_time()
@@ -27,6 +29,68 @@ class CustomDeliveryNote(DeliveryNote):
         if not self.installation_status:
             self.installation_status = "Not Installed"
         self.reset_default_field_value("set_warehouse", "items", "warehouse")
+
+    def before_submit(self):
+        self.check_if_qtys_are_reserved()
+
+    def on_cancel(self):
+        super(CustomDeliveryNote, self).on_cancel()
+        self.update_qtys()
+
+    def check_if_qtys_are_reserved(self):
+        if self.ignore_unreserved_qty: return
+
+        sales_order = None
+        for item in self.items:
+            if item.against_sales_order:
+                sales_order = item.against_sales_order
+                break
+        
+        linked_so = False
+        if sales_order:
+            if frappe.db.exists("Sales Order Qtys", {"sales_order": sales_order, "is_cancelled": 0}):
+                linked_so = True
+                sales_order_qtys = frappe.get_doc("Sales Order Qtys", {"sales_order": sales_order, "is_cancelled": 0})
+                for item in self.items:
+                    for row in sales_order_qtys.items:
+                        if row.so_detail == item.so_detail:
+                            if row.reserved_qty < item.qty:
+                                frappe.throw("Can't deliver the doc. There are {} unreserved qtys".format(item.qty - row.reserved_qty))
+                            
+                            row.delivered_qty += item.qty
+                            row.reserved_qty -= item.qty
+
+                sales_order_qtys.save(ignore_permissions=True)
+
+        if not linked_so:
+            for item in self.items:
+                actual_qty = get_actual_qty(item.item_code)
+                reserved_qty = get_total_reserved_qty(item.item_code)
+
+                remained_reserved_qty = actual_qty - reserved_qty
+
+                if remained_reserved_qty < item.qty:
+                    frappe.throw("Can't deliver the doc. There are {} unreserved qtys".format(item.qty - remained_reserved_qty))
+
+    def update_qtys(self):
+        if self.ignore_unreserved_qty: return
+
+        sales_order = None
+        for item in self.items:
+            if item.against_sales_order:
+                sales_order = item.against_sales_order
+                break
+        
+        if sales_order:
+            if frappe.db.exists("Sales Order Qtys", {"sales_order": sales_order, "is_cancelled": 0}):
+                sales_order_qtys = frappe.get_doc("Sales Order Qtys", {"sales_order": sales_order, "is_cancelled": 0})
+                for item in self.items:
+                    for row in sales_order_qtys.items:
+                        if row.so_detail == item.so_detail:
+                            row.delivered_qty -= item.qty
+                            row.reserved_qty += item.qty
+                
+                sales_order_qtys.save(ignore_permissions=True)
 
 def make_packing_list(doc):
     "Make/Update packing list for Product Bundle Item."
