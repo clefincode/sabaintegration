@@ -3154,7 +3154,7 @@
    "_user_tags": null,
    "amend": 0,
    "cancel": 0,
-   "create": 0,
+   "create": 1,
    "creation": "2024-03-21 12:57:59.314152",
    "delete": 0,
    "docstatus": 0,
@@ -3177,7 +3177,7 @@
    "role": "0 Selling - Quotation Submitting (only)",
    "select": 0,
    "set_user_permissions": 0,
-   "share": 0,
+   "share": 1,
    "submit": 1,
    "user_permission_doctypes": null,
    "write": 1
