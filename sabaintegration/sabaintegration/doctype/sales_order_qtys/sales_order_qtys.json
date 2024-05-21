@@ -47,18 +47,18 @@
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Items",
-   "options": "Sales Order Qtys Item"
+   "options": "Sales Order Qtys Item",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_5",
-   "fieldtype": "Section Break",
-   "read_only": 1
+   "fieldtype": "Section Break"
   }
  ],
  "in_create": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-05-21 21:27:56.043512",
+ "modified": "2024-05-21 21:33:40.197008",
  "modified_by": "Administrator",
  "module": "Sabaintegration",
  "name": "Sales Order Qtys",
