@@ -116,7 +116,7 @@ class CustomSalesOrder(SalesOrder):
 
     def on_submit(self):
         super(CustomSalesOrder, self).on_submit()
-    #     self.create_project_automatically()
+        # self.create_project_automatically()
         create_sales_qtys(self)
 
     def on_cancel(self):
@@ -175,7 +175,8 @@ class CustomSalesOrder(SalesOrder):
 
         incentive_percentage_total = 0
         for row in self.pre_sales_activities:
-            incentive_percentage_total += row.contribution_percentage
+            if row.contribution_percentage:
+                incentive_percentage_total += row.contribution_percentage
         if incentive_percentage_total != 100:
             frappe.throw("The Total of Contribution Percentages in Pre-Sales Activities is not equal to 100%")
 
@@ -495,28 +496,27 @@ def get_commission_percent(sales_man):
     if not quarter: return
 
     leaders = get_primary_sales_man_leaders(sales_man)
-
     commission_percentage = frappe.db.get_value("Quarter Quota", {
         "sales_man": sales_man, 
         "quarter": "Q"+ str(quarter), 
         "year": year, 
-        "docstatus": 1}, "commission_percentage") or 5
+        "docstatus": 1}, "commission_percentage")
 
     primary_commission = frappe.db.get_value("Quarter Quota", {
-        "sales_man": leaders[0], 
+        "sales_man": leaders[0] if leaders else None, 
         "quarter": "Q"+ str(quarter), 
         "year": year, 
-        "docstatus": 1}, "primary_commission_percentage") or 1.5
+        "docstatus": 1}, "primary_commission_percentage")
 
     secondary_commission = frappe.db.get_value("Quarter Quota", {
-        "sales_man": leaders[1], 
+        "sales_man": leaders[1] if leaders else None, 
         "quarter": "Q"+ str(quarter), 
         "year": year, 
-        "docstatus": 1}, "secondary_commission_percentage") or 0.75
+        "docstatus": 1}, "secondary_commission_percentage")
 
     return {"commission_percentage": commission_percentage, 
-            "primary_supervisor": leaders[0],
-            "secondary_supervisor": leaders[1],
+            "primary_supervisor": leaders[0] if leaders else None,
+            "secondary_supervisor": leaders[1] if leaders else None,
             "prm_sup_percentage": primary_commission,
             "sec_sup_percentage": secondary_commission}
 
