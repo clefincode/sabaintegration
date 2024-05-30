@@ -8,6 +8,190 @@ frappe.ui.form.on("Delivery Note", {
         frm.custom_make_buttons['Bundle Delivery Note'] = 'Bundle Delivery Note'
 	},
 })
+
+erpnext.stock.DeliveryNoteController = class DeliveryNoteController extends erpnext.selling.SellingController {
+	setup(doc) {
+		this.setup_posting_date_time_check();
+		super.setup(doc);
+		this.frm.make_methods = {
+			'Delivery Trip': this.make_delivery_trip,
+		};
+	}
+	refresh(doc, dt, dn) {
+		var me = this;
+		super.refresh();
+		if ((!doc.is_return) && (doc.status!="Closed" || this.frm.is_new())) {
+			if (this.frm.doc.docstatus===0) {
+				this.frm.add_custom_button(__('Sales Order'),
+					function() {
+						if (!me.frm.doc.customer) {
+							frappe.throw({
+								title: __("Mandatory"),
+								message: __("Please Select a Customer")
+							});
+						}
+						erpnext.utils.map_current_doc({
+							method: "erpnext.selling.doctype.sales_order.sales_order.make_delivery_note",
+							source_doctype: "Sales Order",
+							target: me.frm,
+							setters: {
+								customer: me.frm.doc.customer,
+							},
+							get_query_filters: {
+								docstatus: 1,
+								status: ["not in", ["Closed", "On Hold"]],
+								per_delivered: ["<", 99.99],
+								company: me.frm.doc.company,
+								// project: me.frm.doc.project || undefined,
+							}
+						})
+					}, __("Get Items From"));
+			}
+		}
+
+		if (!doc.is_return && doc.status!="Closed") {
+			if(doc.docstatus == 1) {
+				this.frm.add_custom_button(__('Shipment'), function() {
+					me.make_shipment() }, __('Create'));
+			}
+
+			if(flt(doc.per_installed, 2) < 100 && doc.docstatus==1)
+				this.frm.add_custom_button(__('Installation Note'), function() {
+					me.make_installation_note() }, __('Create'));
+
+			if (doc.docstatus==1) {
+				this.frm.add_custom_button(__('Sales Return'), function() {
+					me.make_sales_return() }, __('Create'));
+			}
+
+			if (doc.docstatus==1) {
+				this.frm.add_custom_button(__('Delivery Trip'), function() {
+					me.make_delivery_trip() }, __('Create'));
+			}
+
+			if(doc.docstatus==0 && !doc.__islocal) {
+				this.frm.add_custom_button(__('Packing Slip'), function() {
+					frappe.model.open_mapped_doc({
+						method: "erpnext.stock.doctype.delivery_note.delivery_note.make_packing_slip",
+						frm: me.frm
+					}) }, __('Create'));
+			}
+
+			if (!doc.__islocal && doc.docstatus==1) {
+				this.frm.page.set_inner_btn_group_as_primary(__('Create'));
+			}
+		}
+
+		if (doc.docstatus > 0) {
+			this.show_stock_ledger();
+			if (erpnext.is_perpetual_inventory_enabled(doc.company)) {
+				this.show_general_ledger();
+			}
+			if (this.frm.has_perm("submit") && doc.status !== "Closed") {
+				me.frm.add_custom_button(__("Close"), function() { me.close_delivery_note() },
+					__("Status"))
+			}
+		}
+
+		if(doc.docstatus==1 && !doc.is_return && doc.status!="Closed" && flt(doc.per_billed) < 100) {
+			// show Make Invoice button only if Delivery Note is not created from Sales Invoice
+			var from_sales_invoice = false;
+			from_sales_invoice = me.frm.doc.items.some(function(item) {
+				return item.against_sales_invoice ? true : false;
+			});
+
+			if(!from_sales_invoice) {
+				this.frm.add_custom_button(__('Sales Invoice'), function() { me.make_sales_invoice() },
+					__('Create'));
+			}
+		}
+
+		if(doc.docstatus==1 && doc.status === "Closed" && this.frm.has_perm("submit")) {
+			this.frm.add_custom_button(__('Reopen'), function() { me.reopen_delivery_note() },
+				__("Status"))
+		}
+		erpnext.stock.delivery_note.set_print_hide(doc, dt, dn);
+
+		if(doc.docstatus==1 && !doc.is_return && !doc.auto_repeat) {
+			cur_frm.add_custom_button(__('Subscription'), function() {
+				erpnext.utils.make_subscription(doc.doctype, doc.name)
+			}, __('Create'))
+		}
+	}
+
+	make_shipment() {
+		frappe.model.open_mapped_doc({
+			method: "erpnext.stock.doctype.delivery_note.delivery_note.make_shipment",
+			frm: this.frm
+		})
+	}
+
+	make_sales_invoice() {
+		frappe.model.open_mapped_doc({
+			method: "erpnext.stock.doctype.delivery_note.delivery_note.make_sales_invoice",
+			frm: this.frm
+		})
+	}
+
+	make_installation_note() {
+		frappe.model.open_mapped_doc({
+			method: "erpnext.stock.doctype.delivery_note.delivery_note.make_installation_note",
+			frm: this.frm
+		});
+	}
+
+	make_sales_return() {
+		frappe.model.open_mapped_doc({
+			method: "erpnext.stock.doctype.delivery_note.delivery_note.make_sales_return",
+			frm: this.frm
+		})
+	}
+
+	make_delivery_trip() {
+		frappe.model.open_mapped_doc({
+			method: "erpnext.stock.doctype.delivery_note.delivery_note.make_delivery_trip",
+			frm: cur_frm
+		})
+	}
+
+	tc_name() {
+		this.get_terms();
+	}
+
+	items_on_form_rendered(doc, grid_row) {
+		erpnext.setup_serial_or_batch_no();
+	}
+
+	packed_items_on_form_rendered(doc, grid_row) {
+		erpnext.setup_serial_or_batch_no();
+	}
+
+	close_delivery_note(doc){
+		this.update_status("Closed")
+	}
+
+	reopen_delivery_note() {
+		this.update_status("Submitted")
+	}
+
+	update_status(status) {
+		var me = this;
+		frappe.ui.form.is_saving = true;
+		frappe.call({
+			method:"erpnext.stock.doctype.delivery_note.delivery_note.update_delivery_note_status",
+			args: {docname: me.frm.doc.name, status: status},
+			callback: function(r){
+				if(!r.exc)
+					me.frm.reload_doc();
+			},
+			always: function(){
+				frappe.ui.form.is_saving = false;
+			}
+		})
+	}
+};
+
+extend_cscript(cur_frm.cscript, new erpnext.stock.DeliveryNoteController({frm: cur_frm}));
 	
 erpnext.stock.CustomDeliveryNoteController = class CustomDeliveryNoteController extends erpnext.stock.DeliveryNoteController{
 	refresh(doc, dt, dn) {
