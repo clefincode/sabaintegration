@@ -715,7 +715,7 @@ def create_sales_qtys(doc):
 
     # Add packed items to the new doc table if exists
     if doc.get("packed_items"):
-        for item in doc.items:
+        for item in doc.packed_items:
             soq.append("items", {
                 "item_code": item.item_code,
                 "pi_detail": item.name,
