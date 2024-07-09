@@ -689,12 +689,22 @@ def update_sales_orders_brands(year, quarter):
         where so.docstatus = 1 and so.submitting_date != '' and so.submitting_date is not null
         and EXTRACT(YEAR FROM so.submitting_date) = '{year}'
         and CONCAT('Q', CEILING(EXTRACT(MONTH FROM so.submitting_date) / 3.0)) = '{quarter}'
+        
+        UNION
+        
+        select name from `tabSales Order` as so
+        where so.docstatus = 0  and EXTRACT(YEAR FROM so.modified) = '{year}'
+        and CONCAT('Q', CEILING(EXTRACT(MONTH FROM so.modified) / 3.0)) = '{quarter}'
     """
+    
     docs = frappe.db.sql(strQuery, as_list = 1)
     for d in docs:
         doc = frappe.get_doc("Sales Order", d[0])
         doc.update_total_margin()
-        doc.set_brands((doc.submitting_date.month, doc.submitting_date.year), True)
+        if doc.submitting_date:
+            doc.set_brands((doc.submitting_date.month, doc.submitting_date.year), True)
+        else:
+            doc.set_brands((doc.modified.month, doc.modified.year), True)
         doc.save()
 
     frappe.db.commit()
