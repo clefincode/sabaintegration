@@ -181,7 +181,7 @@
    "parent": null,
    "parentfield": null,
    "parenttype": null,
-   "permlevel": 1,
+   "permlevel": 4,
    "precision": "2",
    "print_hide": 0,
    "print_hide_if_no_value": 0,
