@@ -18,7 +18,7 @@ def get_doctypes_customization(module, export):
 	"Get All the Doctypes That was Updated"
 	module = module.lower()
 	doctypes = frappe.get_all(
-		'DocType', filters={'istable': 0, 'issingle': 0}, fields=['name']
+		'DocType', filters={'issingle': 0}, fields=['name']
 	)
 	doctypeslist = [doc.get("name") for doc in doctypes]
 	customized_doctypes = []
