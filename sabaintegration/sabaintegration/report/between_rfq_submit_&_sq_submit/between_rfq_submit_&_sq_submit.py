@@ -61,7 +61,7 @@ def get_data(filters):
 	conditions = get_conditions(filters)
 	results = frappe.db.sql("""
 	select distinct rfq.name as request_for_quotation, sq.name as supplier_quotation,
-		sq.title, cast(sq.creation as date) as creation , sq.submitting_date, sq.supplier_name
+		sq.title, sq.creation , sq.submitting_date, sq.supplier_name
 	from `tabRequest for Quotation` as rfq 
 		inner join `tabSupplier Quotation Item` as sqi on rfq.name = sqi.request_for_quotation
 		inner join `tabSupplier Quotation` as sq on sqi.parent = sq.name
