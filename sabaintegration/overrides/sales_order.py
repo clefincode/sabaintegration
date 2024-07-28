@@ -120,6 +120,7 @@ class CustomSalesOrder(SalesOrder):
         create_sales_qtys(self)
 
     def on_cancel(self):
+        super(CustomSalesOrder, self).on_cancel()
         self.cancel_soq()
 
     def cancel_soq(self):
