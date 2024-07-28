@@ -308,7 +308,7 @@ def set_so_details(entry, sos, qq, employees_list, filters):
 				details['achievement_percentage'] = b_row.achievement_percentage
 				break
 
-		details['achieve_target'] = calculate_incentive(details['achievement_percentage'], default_rule)
+		details['achieve_target'] = calculate_incentive(details.get('achievement_percentage'), default_rule)
  	
 		details['base_net_incentive_value'] = row.base_net_incentive_value
 		details['net_incentive_percentage_from_to'] = row.base_net_incentive_value / entry['base_grand_total'] * 100

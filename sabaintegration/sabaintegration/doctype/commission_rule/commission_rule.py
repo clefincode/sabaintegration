@@ -19,6 +19,8 @@ def calculate_commission(achieve_percent, rule):
 	return
 
 def condition_istrue(achieve_percent, condition_row):
+	if not achieve_percent:
+		achieve_percent = 0
 	if condition_row.condition == 'less than':
 		if achieve_percent < condition_row.milestone:
 			return commission_precent_calcualation(condition_row, achieve_percent)
