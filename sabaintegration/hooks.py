@@ -122,6 +122,7 @@ override_doctype_class = {
     'Payment Reconciliation': 'sabaintegration.overrides.payment_reconciliation.CustomPaymentReconciliation',
     'Purchase Order': 'sabaintegration.overrides.purchase_order.CustomPurchaseOrder',
     'Purchase Receipt': 'sabaintegration.overrides.purchase_receipt.CustomPurchaseReceipt',
+    'Purchase Invoice': 'sabaintegration.overrides.purchase_invoice.CustomPurchaseInvoice',
 }
 
 # Document Events

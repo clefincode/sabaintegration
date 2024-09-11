@@ -1,8 +1,16 @@
 import json
 import frappe
 from erpnext.buying.doctype.purchase_order.purchase_order import PurchaseOrder
+from frappe.utils import now
 
 class CustomPurchaseOrder(PurchaseOrder):
+    def validate(self):
+        # Call the original validate method
+        super(CustomPurchaseOrder, self).validate()
+        if self.get("_action") and self._action == 'submit':
+            self.submitting_date = now()
+
+
     def on_submit(self):
         super(CustomPurchaseOrder, self).on_submit()
         self.set_ordered_qtys()

@@ -4,6 +4,7 @@ from erpnext.stock.doctype.delivery_note.delivery_note import DeliveryNote
 from erpnext.stock.doctype.batch.batch import set_batch_nos
 
 from sabaintegration.sabaintegration.doctype.sales_order_qtys.sales_order_qtys import get_actual_qty, get_total_reserved_qty
+from frappe.utils import now
 
 class CustomDeliveryNote(DeliveryNote):
     def validate(self):
@@ -29,6 +30,9 @@ class CustomDeliveryNote(DeliveryNote):
         if not self.installation_status:
             self.installation_status = "Not Installed"
         self.reset_default_field_value("set_warehouse", "items", "warehouse")
+
+        if self.get("_action") and self._action == 'submit':
+            self.submitting_date = now()
 
     def before_submit(self):
         self.check_if_qtys_are_reserved()
