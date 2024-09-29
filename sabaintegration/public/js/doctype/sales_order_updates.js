@@ -140,6 +140,13 @@ frappe.ui.form.on("Sales Order", {
 			cur_frm.set_value("contracting_tax_calculations", 0);
 		}
 	},
+	delivery_date: function(frm) {
+        // Update delivery date for all items in the Items table
+        frm.doc.items.forEach(item => {
+            item.delivery_date = frm.doc.delivery_date;
+        });
+        frm.refresh_field('items');
+    },
 
 });
 
