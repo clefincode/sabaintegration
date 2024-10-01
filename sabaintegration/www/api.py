@@ -800,3 +800,21 @@ def update_product_manager_incentive_percentage(brands, year, quarter):
                     frappe.db.set_value("Brand Details", {"parent" : so.name , "product_manager" : b["product_manager"]}, "incentive_percentage" , b["incentive_percentage"])                        
             frappe.db.commit()
         return updated_so
+
+
+@frappe.whitelist()
+def get_sales_order_invoices(sales_order):
+
+    query = """
+        SELECT SUM(si.billing_percentage) AS total_billing_percentage
+        FROM `tabSales Invoice` si
+        JOIN `tabSales Invoice Item` sii ON si.name = sii.parent
+        WHERE sii.sales_order = %s
+        AND si.docstatus = 1
+    """
+    
+    result = frappe.db.sql(query, sales_order, as_dict=True)
+    return result[0].total_billing_percentage 
+
+
+
