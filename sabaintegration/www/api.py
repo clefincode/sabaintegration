@@ -818,3 +818,24 @@ def get_sales_order_invoices(sales_order):
 
 
 
+@frappe.whitelist()
+
+def check_linked_documents(sales_order_name):
+    linked_invoices = frappe.get_all('Sales Invoice Item', filters={'sales_order': sales_order_name, 'docstatus': 1}, fields=['parent'])
+
+    linked_journal_entries = frappe.get_all('Journal Entry Account', filters={'reference_name': sales_order_name, 'reference_type': 'Sales Order','docstatus': 1}, fields=['parent'])
+
+    linked_delivery_notes = frappe.get_all('Delivery Note Item',filters={'against_sales_order': sales_order_name,'docstatus': 1  },
+        fields=['parent']
+    )
+
+
+    if linked_invoices or linked_journal_entries or linked_delivery_notes:
+        return {
+            'has_linked_documents': True,
+
+        }
+    
+    return {
+        'has_linked_documents': False,
+    }

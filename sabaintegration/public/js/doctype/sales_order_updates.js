@@ -147,6 +147,41 @@ frappe.ui.form.on("Sales Order", {
         });
         frm.refresh_field('items');
     },
+	 project: function(frm) {
+		if (frm.doc.docstatus === 1) {
+			 frappe.call({
+				  method: 'sabaintegration.www.api.check_linked_documents',
+				  args: {
+						sales_order_name: frm.doc.name
+				  },
+				  async: false, 
+				  callback: function(response) {
+						if (response.message && response.message.has_linked_documents) {
+							 frappe.msgprint(__('This Sales Order is linked to a Journal Entry, Sales Invoice, or Purchase Order. You cannot update the Project.'));
+							 window.location.reload()
+						}
+				  }
+			 });
+		}
+  },
+  cost_center: function(frm) {
+	if (frm.doc.docstatus === 1) {
+		 frappe.call({
+			  method: 'sabaintegration.www.api.check_linked_documents',
+			  args: {
+					sales_order_name: frm.doc.name
+			  },
+			  async: false, 
+			  callback: function(response) {
+					if (response.message && response.message.has_linked_documents) {
+						 frappe.msgprint(__('This Sales Order is linked to a Journal Entry, Sales Invoice, or Purchase Order. You cannot update the Cost Center.'));
+						 window.location.reload()
+					}
+			  }
+		 });
+	}
+},
+  
 
 });
 
