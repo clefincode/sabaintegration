@@ -46,7 +46,9 @@ doctype_js = {
 	"Purchase Order": "public/js/doctype/purchase_order.js",
     "Expense Claim": "public/js/doctype/expense_claim.js",
     "Payment Reconciliation": "public/js/doctype/payment_reconciliation.js",
-    "Sales Invoice": "public/js/doctype/sales_invoice.js"
+    "Sales Invoice": "public/js/doctype/sales_invoice.js",
+	"Purchase Receipt":"public/js/doctype/purchase_receipt.js",
+
 	}
 # doctype_list_js = {"Opportunity" : "public/js/doctype/opportunity_list.js"}
 doctype_list_js = {"Request for Quotation" : "public/js/doctype/request_for_quotation_list.js"}
