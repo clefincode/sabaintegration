@@ -244,18 +244,14 @@ def get_payments_details(filters, employees='', add_supervisior_row=False):
 
 
 	# Format the query with the values for logging
-	formatted_query = strQuery % tuple(values * 2)
-
-	# Log the formatted query using frappe.log_error
-	frappe.log_error(message=formatted_query, title="Formatted SQL Query with Values")
-
+	#formatted_query = strQuery % tuple(values * 2)
 
 	# Execute the query with the correct number of values
 	# Since `conditions` appears twice (once in each SELECT), the values need to be repeated for the second part of the UNION
 	so_entries = frappe.db.sql(strQuery, values * 2, as_dict=1)
 
 
-
+	logresult = ""
 
 	results, sos, currencies = [], {}, []
 	if not so_entries:
@@ -280,7 +276,6 @@ def get_payments_details(filters, employees='', add_supervisior_row=False):
 			employees_str = employees.split("(", 1)[-1].split(")", 1)[0]
 			# Step 2: Split the remaining string by commas and strip quotes and spaces
 			sales_persons_list = [name.strip().strip("'") for name in employees_str.split(",")]
-			frappe.log_error(message=filters, title="Filtered Sales Person")
 			details = set_so_details(sales_order, entry, sos, filters, sales_persons_list)
 			
 			if details:
@@ -288,7 +283,6 @@ def get_payments_details(filters, employees='', add_supervisior_row=False):
 
 				if add_supervisior_row: 
 					results = add_supervision_row(results, "Primary")
-					#print(results)
 					results = add_supervision_row(results,  "Secondary")
 
 	return results, currencies
@@ -338,10 +332,11 @@ def set_so_details(sales_order, entry, sos, filters, sales_persons_list = None):
 				continue
 
 		# 2. If a list of sales_persons is provided, check against the list
-		elif sales_persons_list:
+		elif sales_persons_list and any(sales_persons_list):
 			if row.sales_person not in sales_persons_list:
 				continue
 
+		
 		# Deep copy the entry dictionary to create a new detail row
 		details = deepcopy(entry)
 		details['sales_person'] = row.sales_person
