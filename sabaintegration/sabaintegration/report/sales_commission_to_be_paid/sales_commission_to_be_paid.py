@@ -130,114 +130,169 @@ def get_columns(curriences):
 
 def get_conditions(filters):
 	conditions = ""
+	values = []
+
 	if filters.get("sales_order"):
-		conditions += " and so.name = %(sales_order)s"
+		conditions += " and so.name = %s"
+		values.append(filters.get("sales_order"))
+
 	if filters.get("year"):
-		conditions += " and EXTRACT(YEAR FROM je.submitting_date) = %(year)s"
+		conditions += " and EXTRACT(YEAR FROM je.submitting_date) = %s"
+		values.append(filters.get("year"))
+
 	if filters.get("quarter"):
-		conditions += " and CONCAT('Q', CEILING(EXTRACT(MONTH FROM je.submitting_date) / 3.0)) = %(quarter)s"
-	return conditions
+		conditions += " and CONCAT('Q', CEILING(EXTRACT(MONTH FROM je.submitting_date) / 3.0)) = %s"
+		values.append(filters.get("quarter"))
+
+	return conditions, values
 
 def get_data(filters):
 	employees = ''
 	if frappe.session.user != "Administrator" and "0 Accounting - Sales Persons Commission Report" not in frappe.get_roles():		
 		employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
 		
-		if not employee: return
+		if not employee: 
+			frappe.throw("Employee record not found for the logged-in user. Please contact the administrator.")
 
 		sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
-		
-		if not sales_person: return
+		if not sales_person: 
+			frappe.throw("Sales Person not found for the employee. Please check the Sales Person record.")
 
 		if not filters.get("sales_man"):
 			employees = "and comm.sales_person in ({}) ".format(employees_query(sales_person))
 		else:
 			sales_man = employees_query(sales_person, filters.get("sales_man", None))
+
 			if not sales_man: return
 
-			employees = "and comm.sales_person = '{}' ".format(sales_man)
+			# Use IN clause if there are multiple salespersons in the returned string
+			if "," in sales_man:
+				employees = "and comm.sales_person IN ({}) ".format(sales_man)
+			else:
+				employees = "and comm.sales_person = '{}' ".format(sales_man)
 
-	co_results = get_payments_details(filters, employees, True)
+	
+
+
+	co_results = get_payments_details(filters, employees, False)
 	
 	return co_results
 
-def get_payments_details(filters, employees = '', add_supervisior_row = False):
-	conditions = get_conditions(filters)
-	sos = ''
-	if employees:
-		soslist = frappe.db.sql("""
-			select distinct so.name
-			from `tabSales Order` as so
-			inner join `taSales Commission` as comm on comm.parent = so.name
-			where so.docstatus = 1
-			{employees}
-		""".format(employees = employees), as_list = 1)
-		if soslist:
-			sos = " and so.name in ("
-			for so in soslist:
-				sos += " '{}',".format(so[0])
-			sos = sos[:-1] + ")"
+def get_payments_details(filters, employees='', add_supervisior_row=False):
 	
+	# Generate conditions and values based on filters
+	conditions, values = get_conditions(filters)
+
+
 	strQuery = """
-		select distinct so.name as sales_order, so.base_grand_total,
-		je.name as entry, jea.name as account_name, 
-		jea.credit_in_account_currency as current_payment, jea.credit,
-		jea.account_currency, jea.exchange_rate, je.creation as creation_date
-		from `tabJournal Entry` as je
-		inner join `tabJournal Entry Account` as jea on jea.parent = je.name
-		inner join `tabSales Invoice` as si on jea.reference_name = si.name and si.docstatus = 1
-		inner join `tabSales Invoice Item` as sii on sii.parent = si.name
-		inner join `tabSales Order` as so on so.name = sii.sales_order and so.docstatus = 1
-		where je.docstatus = 1
-		{sos}
+	SELECT DISTINCT 
+		so.name AS sales_order, 
+		so.base_grand_total,
+		je.name AS entry, 
+		jea.name AS account_name, 
+		jea.credit_in_account_currency AS current_payment, 
+		jea.credit,
+		jea.account_currency, 
+		jea.exchange_rate, 
+		je.creation AS creation_date
+	FROM 
+		`tabJournal Entry` AS je
+	INNER JOIN 
+		`tabJournal Entry Account` AS jea ON jea.parent = je.name
+	INNER JOIN 
+		`tabSales Invoice` AS si ON jea.reference_name = si.name AND si.docstatus = 1
+	INNER JOIN 
+		`tabSales Invoice Item` AS sii ON sii.parent = si.name
+	INNER JOIN 
+		`tabSales Order` AS so ON so.name = sii.sales_order AND so.docstatus = 1
+	INNER JOIN 
+		`tabSales Commission` AS comm ON  comm.parent = so.name {employees}
+
+	WHERE 
+		je.docstatus = 1
 		{conditions}
 
-		union
+	UNION
 
-		select distinct so.name as sales_order, so.base_grand_total,
-		je.name as entry, jea.name as account_name,
-		jea.credit_in_account_currency as current_payment, jea.credit,
-		jea.account_currency, jea.exchange_rate, je.creation as creation_date
-		from `tabJournal Entry` as je
-		inner join `tabJournal Entry Account` as jea on jea.parent = je.name
-		inner join `tabSales Order` as so on so.name = jea.reference_name and so.docstatus = 1
-		where je.docstatus = 1
-		{sos}
+	SELECT DISTINCT 
+		so.name AS sales_order, 
+		so.base_grand_total,
+		je.name AS entry, 
+		jea.name AS account_name,
+		jea.credit_in_account_currency AS current_payment, 
+		jea.credit,
+		jea.account_currency, 
+		jea.exchange_rate, 
+		je.creation AS creation_date
+	FROM 
+		`tabJournal Entry` AS je
+	INNER JOIN 
+		`tabJournal Entry Account` AS jea ON jea.parent = je.name
+	INNER JOIN 
+		`tabSales Order` AS so ON so.name = jea.reference_name AND so.docstatus = 1
+	INNER JOIN 
+		`tabSales Commission` AS comm ON  comm.parent = so.name {employees}
+	WHERE 
+		je.docstatus = 1
 		{conditions}
-		order by sales_order, creation_date
 
-	""".format(conditions = conditions, sos = sos)
-	so_entries = frappe.db.sql(strQuery, filters, as_dict = 1)
-	if not add_supervisior_row: 
-		return so_entries
+	ORDER BY 
+		sales_order, creation_date;
+	""".format(employees = employees, conditions=conditions)
+
+
+
+
+	# Format the query with the values for logging
+	formatted_query = strQuery % tuple(values * 2)
+
+	# Log the formatted query using frappe.log_error
+	frappe.log_error(message=formatted_query, title="Formatted SQL Query with Values")
+
+
+	# Execute the query with the correct number of values
+	# Since `conditions` appears twice (once in each SELECT), the values need to be repeated for the second part of the UNION
+	so_entries = frappe.db.sql(strQuery, values * 2, as_dict=1)
+
+
+
 
 	results, sos, currencies = [], {}, []
+	if not so_entries:
+		frappe.throw("There are no records to show based on the provided filters.")
 
-	for entry in so_entries:
-		sales_order = entry['sales_order']
-		set_payment_in_debit_currency(entry)
-		if not sos.get(entry['sales_order']):
-			additional_taxes = get_additional_taxes(sales_order, filters)
-			#sos.append(sales_order)
+	else:
+		for entry in so_entries:
+			sales_order = entry['sales_order']
+			set_payment_in_debit_currency(entry)
+			if not sos.get(entry['sales_order']):
+				additional_taxes = get_additional_taxes(sales_order, filters)
+				#sos.append(sales_order)
 
-		sos[entry['sales_order']] = sos.get(entry['sales_order'], 0) + entry['credit']
-		#sos[sales_order]['current_payment'] -= additional_taxes
-		entry['additional_taxes'] = additional_taxes
-		
-		if entry.account_currency not in currencies:
-			currencies.append(entry.account_currency)
+			sos[entry['sales_order']] = sos.get(entry['sales_order'], 0) + entry['credit']
+			#sos[sales_order]['current_payment'] -= additional_taxes
+			entry['additional_taxes'] = additional_taxes
+			
+			if entry.account_currency not in currencies:
+				currencies.append(entry.account_currency)
 
-		details = set_so_details(sales_order, entry, sos, filters)
-		
-		if details:
-			results.extend(details)
+			#employees = "and comm.sales_person in ( 'Ahmad', 'Saleem', 'Team leader') "
+			employees_str = employees.split("(", 1)[-1].split(")", 1)[0]
+			# Step 2: Split the remaining string by commas and strip quotes and spaces
+			sales_persons_list = [name.strip().strip("'") for name in employees_str.split(",")]
+			frappe.log_error(message=filters, title="Filtered Sales Person")
+			details = set_so_details(sales_order, entry, sos, filters, sales_persons_list)
+			
+			if details:
+				results.extend(details)
 
-			results = add_supervision_row(results, "Primary")
-			#print(results)
-			results = add_supervision_row(results,  "Secondary")
+				if add_supervisior_row: 
+					results = add_supervision_row(results, "Primary")
+					#print(results)
+					results = add_supervision_row(results,  "Secondary")
 
 	return results, currencies
-
+	
 def set_payment_in_debit_currency(entry):
 	doc = frappe.get_doc("Journal Entry", entry["entry"])
 	credit_currency, account_name = entry["account_currency"], entry["account_name"]
@@ -269,15 +324,25 @@ def set_payment_in_debit_currency(entry):
 
 
 
-def set_so_details(sales_order, entry, sos, filters):
+def set_so_details(sales_order, entry, sos, filters, sales_persons_list = None):
 	doc = frappe.get_doc("Sales Order", sales_order)
 	
 	if not doc.get("sales_commission"): return
 	
 	total_details = []
 	for row in doc.sales_commission:
-		if filters.get("sales_man") and filters["sales_man"] != row.sales_person: continue
+		# Determine which filter to use for sales_person
+		# 1. If a specific sales_man is provided in filters, use it
+		if filters.get("sales_man"):
+			if row.sales_person != filters["sales_man"]:
+				continue
 
+		# 2. If a list of sales_persons is provided, check against the list
+		elif sales_persons_list:
+			if row.sales_person not in sales_persons_list:
+				continue
+
+		# Deep copy the entry dictionary to create a new detail row
 		details = deepcopy(entry)
 		details['sales_person'] = row.sales_person
 		details['stage_title'] = row.stage_title
