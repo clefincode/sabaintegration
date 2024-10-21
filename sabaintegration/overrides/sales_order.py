@@ -68,6 +68,8 @@ class CustomSalesOrder(SalesOrder):
         super(CustomSalesOrder, self).before_update_after_submit()
         self.validate_sales_commission()
         self.validate_pre_sales_activities()
+        self.update_costs()
+
         
     def on_update_after_submit(self):
         self.update_total_margin()

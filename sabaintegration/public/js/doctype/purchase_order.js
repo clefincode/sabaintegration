@@ -148,6 +148,7 @@ frappe.ui.form.on("Purchase Order Item", {
 	}
 });
 
+erpnext.buying.setup_buying_controller();
 erpnext.buying.PurchaseOrderController = class PurchaseOrderController extends erpnext.buying.BuyingController {
 	setup() {
 		this.frm.custom_make_buttons = {

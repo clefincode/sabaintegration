@@ -17,6 +17,8 @@ from erpnext.accounts.utils import (
 )
 from erpnext.controllers.accounts_controller import get_advance_payment_entries
 from erpnext.accounts.doctype.payment_reconciliation.payment_reconciliation import PaymentReconciliation
+from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import get_dimensions
+from erpnext.controllers.accounts_controller import get_advance_payment_entries_for_regional
 
 
 class CustomPaymentReconciliation(PaymentReconciliation):
@@ -25,6 +27,7 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 		self.common_filter_conditions = []
 		self.accounting_dimension_filter_conditions = []
 		self.ple_posting_date_filter = []
+		self.dimensions = get_dimensions()[0]
 
 	@frappe.whitelist()
 	def get_unearned_entries(self):
@@ -151,12 +154,39 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 		self.add_payment_entries(non_reconciled_payments)
 
 	def get_payment_entries(self):
+		if self.default_advance_account:
+			party_account = [self.receivable_payable_account, self.default_advance_account]
+		else:
+			party_account = [self.receivable_payable_account]
+
 		order_doctype = "Sales Order" if self.party_type == "Customer" else "Purchase Order"
-		condition = self.get_conditions(get_payments=True)
-		payment_entries = get_advance_payment_entries(
+		condition = frappe._dict(
+			{
+				"company": self.get("company"),
+				"get_payments": True,
+				"cost_center": self.get("cost_center"),
+				"from_payment_date": self.get("from_payment_date"),
+				"to_payment_date": self.get("to_payment_date"),
+				"maximum_payment_amount": self.get("maximum_payment_amount"),
+				"minimum_payment_amount": self.get("minimum_payment_amount"),
+			}
+		)
+
+		if self.payment_name:
+			condition.update({"name": self.payment_name})
+
+		# pass dynamic dimension filter values to query builder
+		dimensions = {}
+		for x in self.dimensions:
+			dimension = x.fieldname
+			if self.get(dimension):
+				dimensions.update({dimension: self.get(dimension)})
+		condition.update({"accounting_dimensions": dimensions})
+
+		payment_entries = get_advance_payment_entries_for_regional(
 			self.party_type,
 			self.party,
-			self.receivable_payable_account,
+			party_account,
 			order_doctype,
 			against_all_orders=True,
 			limit=self.payment_limit,
@@ -219,11 +249,9 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 		return list(journal_entries)
 
 	def get_dr_or_cr_notes(self):
-
 		self.build_qb_filter_conditions(get_return_invoices=True)
 
 		ple = qb.DocType("Payment Ledger Entry")
-		voucher_type = "Sales Invoice" if self.party_type == "Customer" else "Purchase Invoice"
 
 		if erpnext.get_party_account_type(self.party_type) == "Receivable":
 			self.common_filter_conditions.append(ple.account_type == "Receivable")
@@ -231,30 +259,19 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 			self.common_filter_conditions.append(ple.account_type == "Payable")
 		self.common_filter_conditions.append(ple.account == self.receivable_payable_account)
 
-		# get return invoices
-		doc = qb.DocType(voucher_type)
-		return_invoices = (
-			qb.from_(doc)
-			.select(ConstantColumn(voucher_type).as_("voucher_type"), doc.name.as_("voucher_no"))
-			.where(
-				(doc.docstatus == 1)
-				& (doc[frappe.scrub(self.party_type)] == self.party)
-				& (doc.is_return == 1)
-				& (IfNull(doc.return_against, "") == "")
-			)
-			.run(as_dict=True)
-		)
+		self.get_return_invoices()
 
 		outstanding_dr_or_cr = []
-		if return_invoices:
+		if self.return_invoices:
 			ple_query = QueryPaymentLedger()
 			return_outstanding = ple_query.get_voucher_outstandings(
-				vouchers=return_invoices,
+				vouchers=self.return_invoices,
 				common_filter=self.common_filter_conditions,
 				posting_date=self.ple_posting_date_filter,
 				min_outstanding=-(self.minimum_payment_amount) if self.minimum_payment_amount else None,
 				max_outstanding=-(self.maximum_payment_amount) if self.maximum_payment_amount else None,
 				get_payments=True,
+				accounting_dimensions=self.accounting_dimension_filter_conditions,
 			)
 
 			for inv in return_outstanding:
@@ -267,6 +284,7 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 								"amount": -(inv.outstanding_in_account_currency),
 								"posting_date": inv.posting_date,
 								"currency": inv.currency,
+								"cost_center": inv.cost_center,
 							}
 						)
 					)
@@ -284,16 +302,32 @@ class CustomPaymentReconciliation(PaymentReconciliation):
 
 		self.build_qb_filter_conditions(get_invoices=True)
 
+		accounts = [self.receivable_payable_account]
+
+		if self.default_advance_account:
+			accounts.append(self.default_advance_account)
+
 		non_reconciled_invoices = get_outstanding_invoices(
 			self.party_type,
 			self.party,
-			self.receivable_payable_account,
+			accounts,
 			common_filter=self.common_filter_conditions,
 			posting_date=self.ple_posting_date_filter,
 			min_outstanding=self.minimum_invoice_amount if self.minimum_invoice_amount else None,
 			max_outstanding=self.maximum_invoice_amount if self.maximum_invoice_amount else None,
 			accounting_dimensions=self.accounting_dimension_filter_conditions,
+			limit=self.invoice_limit,
+			voucher_no=self.invoice_name,
 		)
+
+		cr_dr_notes = (
+			[x.voucher_no for x in self.return_invoices]
+			if self.party_type in ["Customer", "Supplier"]
+			else []
+		)
+		# Filter out cr/dr notes from outstanding invoices list
+		# Happens when non-standalone cr/dr notes are linked with another invoice through journal entry
+		non_reconciled_invoices = [x for x in non_reconciled_invoices if x.voucher_no not in cr_dr_notes]
 
 		if self.invoice_limit:
 			non_reconciled_invoices = non_reconciled_invoices[: self.invoice_limit]

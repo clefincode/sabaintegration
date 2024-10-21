@@ -1,7 +1,7 @@
 import frappe
 from frappe.utils import cint
 from erpnext.stock.doctype.delivery_note.delivery_note import DeliveryNote
-from erpnext.stock.doctype.batch.batch import set_batch_nos
+# from erpnext.stock.doctype.batch.batch import set_batch_nos
 
 from sabaintegration.sabaintegration.doctype.sales_order_qtys.sales_order_qtys import get_actual_qty, get_total_reserved_qty
 from frappe.utils import now
@@ -18,12 +18,13 @@ class CustomDeliveryNote(DeliveryNote):
         self.validate_uom_is_integer("stock_uom", "stock_qty")
         self.validate_uom_is_integer("uom", "qty")
         self.validate_with_previous_doc()
+        self.set_serial_and_batch_bundle_from_pick_list()
 
         make_packing_list(self)
 
-        if self._action != "submit" and not self.is_return:
-            set_batch_nos(self, "warehouse", throw=True)
-            set_batch_nos(self, "warehouse", throw=True, child_table="packed_items")
+        # if self._action != "submit" and not self.is_return:
+        #     set_batch_nos(self, "warehouse", throw=True)
+        #     set_batch_nos(self, "warehouse", throw=True, child_table="packed_items")
 
         self.update_current_stock()
 
