@@ -554,7 +554,7 @@ const check_change_qty = async function(frm, d){
 				return;
 			}
 			else {
-				frappe.dom.freeze();
+				// frappe.dom.freeze();
 				let warn = await check_qty(frm, d);
 				if (warn.message == false){
 					await frappe.confirm("The quantity in opportunity of this item is not the same as you've provided. Are you sure of changing the qty", 
@@ -564,7 +564,7 @@ const check_change_qty = async function(frm, d){
 							if (packed_items) update_packed_items_qty(frm, packed_items.items, d)					
 							sabaintegration.set_total_without_margin(frm);
 							sabaintegration.calculate_total_margin(frm, true);
-							frappe.dom.unfreeze();
+							// frappe.dom.unfreeze();
 						}, 2000)
 					},
 					() => {

@@ -12,13 +12,19 @@ class CustomExpenseClaim(ExpenseClaim):
         self.validate_advances()
         self.set_expense_account(validate=True)
         self.set_payable_account()
-        self.set_cost_center()
+        # self.set_cost_center()
         self.calculate_taxes()
         self.calculate_taxes_in_expense_claim_currency()
         self.set_status()
         if self.task and not self.project:
             self.project = frappe.db.get_value("Task", self.task, "project")
     
+    def set_payable_account(self):
+        if not self.payable_account and not self.is_paid:
+            self.payable_account = frappe.get_cached_value(
+                "Company", self.company, "default_expense_claim_payable_account"
+            )
+            
     def calculate_total_amount(self):
         self.total_claimed_amount, self.total_claimed_amount_in_expense_claim_currency = 0, 0
         self.total_sanctioned_amount, self.total_sanctioned_amount_in_expense_claim_currency = 0, 0

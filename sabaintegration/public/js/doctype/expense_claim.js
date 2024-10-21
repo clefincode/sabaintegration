@@ -107,6 +107,36 @@ frappe.ui.form.on('Expense Claim', {
             d.rate = d.rate_in_in_expense_claim_currency * frm.doc.exchange_rate;  
             frappe.model.set_value(d.doctype, d.name, "tax_amount", d.tax_amount_in_expense_claim_currency * frm.doc.exchange_rate);
         });
+    },
+    project: function(frm) {
+        if (frm.doc.project) {
+            frappe.call({
+                method: 'frappe.client.get',
+                args: {
+                    doctype: 'Project',
+                    name: frm.doc.project,
+                },
+                callback: function(r) {
+                    if (r.message) {
+                        let project = r.message;
+                        if (project.cost_center) {
+                            frm.set_value('cost_center', project.cost_center);
+    
+                            // Set cost center for table field
+                            if (frm.doc.expenses) {
+                                frm.doc.expenses.forEach(function(row) {
+                                    frappe.model.set_value(row.doctype, row.name, 'cost_center', project.cost_center);
+                                    frappe.model.set_value(row.doctype, row.name, 'project', frm.doc.project);
+
+                                });
+                            }
+                        } else {
+                            frappe.msgprint(__('The selected project does not have a default cost center.'));
+                        }
+                    }
+                }
+            });
+        }
     }
 })
 
@@ -132,6 +162,11 @@ frappe.ui.form.on('Expense Claim Detail', {
         await cur_frm.cscript.calculate_total_in_expense_claim_currency(frm.doc, cdt, cdn);
         await frm.trigger("get_taxes");
         frm.trigger("calculate_grand_total_in_expense_claim_currency");
+        if (d.amount_in_expense_claim_currency != 0){
+            frappe.model.set_value(cdt, cdn, 'amount_in_expense_claim_currency', d.sanctioned_amount_in_expense_claim_currency)
+            d.amount = d.amount_in_expense_claim_currency * frm.doc.exchange_rate;
+        }
+    
     }
 })
 

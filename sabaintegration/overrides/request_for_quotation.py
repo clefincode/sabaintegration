@@ -29,7 +29,7 @@ class CustomRequestforQuotation(RequestforQuotation):
             self.submitting_date = now()
     
     def on_submit(self):
-        frappe.db.set(self, "status", "Submitted")
+        frappe.db.set_value(self.doctype, self.name, "status", "Submitted")
         for supplier in self.suppliers:
             supplier.email_sent = 0
             supplier.quote_status = "Pending"

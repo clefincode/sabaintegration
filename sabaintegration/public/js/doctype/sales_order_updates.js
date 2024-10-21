@@ -73,6 +73,24 @@ frappe.ui.form.on("Sales Order", {
 			}, 1000);
 		}
 		frm.events.set_base_rates();
+		if (frm.doc.docstatus === 1) {  
+			const required_role = '0 Selling - Sales Order Creation for project and cost center';
+			
+			if (!frappe.user.has_role(required_role)) {
+				 frm.set_df_property('cost_center', 'read_only', 1);
+				 frm.set_df_property('cost_center', 'allow_on_submit', 0);
+				 frm.set_df_property('project', 'allow_on_submit', 0);
+
+
+				 frm.set_df_property('project', 'read_only', 1);
+			} else {
+				 frm.set_df_property('cost_center', 'read_only', 0);
+				 frm.set_df_property('project', 'read_only', 0);
+				 frm.set_df_property('cost_center', 'allow_on_submit', 1);
+				 frm.set_df_property('project', 'allow_on_submit', 1);
+
+			}
+	  }
 	},
 	conversion_rate: function (frm) {
 		frm.events.set_rates_without_margin(frm)
