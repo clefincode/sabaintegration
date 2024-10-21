@@ -114,7 +114,7 @@ def get_columns(filters):
         },
         {
             "label": _("Consultant Approval"),
-            "fieldname": "consultant_approval",
+            "fieldname": "custom_consultant_approval",
             "fieldtype": "Data",
             "width": 50
         }
@@ -148,7 +148,7 @@ def get_data(filters):
         soqi.projected_qty,
         soqi.ordered_qty,
         soqi.remained_qty,
-        NULL AS consultant_approval,
+        custom_consultant_approval AS custom_consultant_approval,
         project.sales_order AS first_sales_order
     
     FROM `tabSales Order Qtys` AS soq 
