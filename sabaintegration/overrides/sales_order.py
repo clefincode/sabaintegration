@@ -53,6 +53,7 @@ class CustomSalesOrder(SalesOrder):
 
     def custom_validate(self):
         self.update_total_margin()
+        self.update_costs()
         self.validate_commission()
         self.validate_sales_commission()
         self.validate_pre_sales_activities()
