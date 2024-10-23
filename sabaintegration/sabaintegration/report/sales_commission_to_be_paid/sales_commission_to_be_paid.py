@@ -174,7 +174,7 @@ def get_data(filters):
 	
 
 
-	co_results = get_payments_details(filters, employees, False)
+	co_results = get_payments_details(filters, employees, True)
 	
 	return co_results
 
