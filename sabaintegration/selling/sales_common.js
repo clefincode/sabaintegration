@@ -2,7 +2,8 @@
 // License: GNU General Public License v3. See license.txt
 
 cur_frm.cscript.tax_table = "Sales Taxes and Charges";
-{% include 'erpnext/selling/sales_common.js' %}
+// {% include 'erpnext/selling/sales_common.js' %}
+{% include 'erpnext/public/js/utiles/sales_common.js' %}
 
 
 cur_frm.email_field = "contact_email";
