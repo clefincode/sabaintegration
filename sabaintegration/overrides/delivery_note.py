@@ -35,12 +35,41 @@ class CustomDeliveryNote(DeliveryNote):
         if self.get("_action") and self._action == 'submit':
             self.submitting_date = now()
 
+    def on_submit(self):
+        super(CustomDeliveryNote, self).on_submit()
+        self.on_submit_delivery_note()
+
+
+
     def before_submit(self):
         self.check_if_qtys_are_reserved()
 
     def on_cancel(self):
         super(CustomDeliveryNote, self).on_cancel()
         self.update_qtys()
+
+    def on_submit_delivery_note(self):
+        customer = self.customer  
+
+        for item in self.items:
+            if item.serial_no:
+                serial_nos = item.serial_no.split("\n")
+                for serial in serial_nos:
+                    self.update_serial_custom_customer(serial, customer)
+            else:
+                if item.serial_and_batch_bundle:
+                    serial_and_batch = frappe.get_doc("Serial and Batch Bundle", item.serial_and_batch_bundle)
+                    for row in serial_and_batch.entries:
+                        self.update_serial_custom_customer(row.serial_no, customer)
+
+
+    def update_serial_custom_customer(self, serial_no, customer):
+        serial_doc = frappe.get_doc("Serial No", serial_no)
+        
+        if not serial_doc.custom_customer:
+            serial_doc.custom_customer = customer
+            serial_doc.save()
+
 
     def check_if_qtys_are_reserved(self):
         if self.ignore_unreserved_qty: return
