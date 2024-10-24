@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Ahmad and contributors
 // For license information, please see license.txt
-//{% include 'erpnext/selling/sales_common.js' %};
 frappe.provide("erpnext");
 frappe.provide("erpnext.utils");
 
